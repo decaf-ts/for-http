@@ -28,7 +28,6 @@ describe("Rest Service", () => {
   let postMock: any;
   let putMock: any;
   let deleteMock: any;
-  let requestMock: any;
 
   beforeEach(function () {
     jest.clearAllMocks();
@@ -37,7 +36,6 @@ describe("Rest Service", () => {
     postMock = jest.spyOn(adapter.native as Axios, "post");
     putMock = jest.spyOn(adapter.native as Axios, "put");
     deleteMock = jest.spyOn(adapter.native as Axios, "delete");
-    requestMock = jest.spyOn(adapter.native as Axios, "request");
   });
 
   const model: TestModel = new TestModel({
@@ -69,6 +67,7 @@ describe("Rest Service", () => {
   });
 
   it("reads", async function () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string) => {
       return Object.assign({}, model);
     });
@@ -108,6 +107,7 @@ describe("Rest Service", () => {
   });
 
   it("deletes", async function () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     deleteMock.mockImplementation(async (url: string) => {
       return Object.assign({}, model);
     });

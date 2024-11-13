@@ -103,12 +103,12 @@
     "webpack-stream": "^7.0.0"
   },
   "peerDependencies": {
-    "axios": "^1.7.7",
     "@decaf-ts/core": "latest",
     "@decaf-ts/db-decorators": "latest",
     "@decaf-ts/decorator-validation": "latest",
     "@decaf-ts/injectable-decorators": "latest",
     "@decaf-ts/reflection": "latest",
+    "axios": "^1.7.7",
     "reflect-metadata": "^0.2.1"
   }
 }

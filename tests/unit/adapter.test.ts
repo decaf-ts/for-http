@@ -20,7 +20,6 @@ describe("Axios adapter", function () {
   let postMock: any;
   let putMock: any;
   let deleteMock: any;
-  let requestMock: any;
 
   beforeEach(function () {
     jest.clearAllMocks();
@@ -29,7 +28,6 @@ describe("Axios adapter", function () {
     postMock = jest.spyOn(adapter.native as Axios, "post");
     putMock = jest.spyOn(adapter.native as Axios, "put");
     deleteMock = jest.spyOn(adapter.native as Axios, "delete");
-    requestMock = jest.spyOn(adapter.native as Axios, "request");
   });
 
   const tableName: string = "test";
@@ -55,6 +53,7 @@ describe("Axios adapter", function () {
   });
 
   it("Properly invokes read", async function () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string) => {
       return Object.assign({}, record);
     });
@@ -82,6 +81,7 @@ describe("Axios adapter", function () {
   });
 
   it("Properly invokes delete", async function () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     deleteMock.mockImplementation(async (url: string) => {
       return Object.assign({}, record);
     });
