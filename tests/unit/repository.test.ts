@@ -1,8 +1,7 @@
 import { AxiosHttpAdapter, HttpAdapter, HttpConfig } from "../../src";
 import { Axios } from "axios";
-import { TestModel } from "./TestModel";
-import { pk, Repository } from "@decaf-ts/core";
-import { IRepository, OperationKeys, timestamp } from "@decaf-ts/db-decorators";
+import { Adapter, pk, Repository } from "@decaf-ts/core";
+import { OperationKeys, timestamp } from "@decaf-ts/db-decorators";
 import {
   model,
   Model,
@@ -44,7 +43,7 @@ class OtherTestModel extends Model {
 
 describe("RestRepository", function () {
   let adapter: HttpAdapter<unknown, unknown>;
-  let repo: IRepository<OtherTestModel>;
+  let repo: RestRepository<OtherTestModel, unknown, Adapter<unknown, unknown>>;
 
   beforeAll(function () {
     adapter = new AxiosHttpAdapter(new Axios(), cfg);
@@ -56,7 +55,6 @@ describe("RestRepository", function () {
   let postMock: any;
   let putMock: any;
   let deleteMock: any;
-  let requestMock: any;
 
   beforeEach(function () {
     jest.clearAllMocks();
@@ -65,7 +63,6 @@ describe("RestRepository", function () {
     postMock = jest.spyOn(adapter.native as Axios, "post");
     putMock = jest.spyOn(adapter.native as Axios, "put");
     deleteMock = jest.spyOn(adapter.native as Axios, "delete");
-    requestMock = jest.spyOn(adapter.native as Axios, "request");
   });
 
   const model: OtherTestModel = new OtherTestModel({
@@ -101,6 +98,7 @@ describe("RestRepository", function () {
   });
 
   it("reads", async function () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string) => {
       return Object.assign({}, created);
     });
@@ -122,6 +120,7 @@ describe("RestRepository", function () {
         return Object.assign({}, data);
       }
     );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string, id: string) => {
       return Object.assign({}, created);
     });
@@ -144,9 +143,11 @@ describe("RestRepository", function () {
   });
 
   it("deletes", async function () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     deleteMock.mockImplementation(async (url: string, id: string) => {
       return Object.assign({}, updated);
     });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string, id: string) => {
       return Object.assign({}, updated);
     });
