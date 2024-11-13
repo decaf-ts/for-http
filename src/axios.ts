@@ -4,14 +4,14 @@ import { HttpConfig } from "./types";
 
 export class AxiosHttpAdapter extends HttpAdapter<Axios, AxiosRequestConfig> {
   constructor(native: Axios, config: HttpConfig, flavour: string = "axios") {
-    super(native, config, flavour);
+    super(native as any, config, flavour);
   }
 
-  override request<V>(details: AxiosRequestConfig): Promise<V> {
+  override async request<V>(details: AxiosRequestConfig): Promise<V> {
     return this.native.request(details);
   }
 
-  create(
+  async create(
     tableName: string,
     id: string | number,
     model: Record<string, any>
@@ -23,7 +23,7 @@ export class AxiosHttpAdapter extends HttpAdapter<Axios, AxiosRequestConfig> {
       throw this.parseError(e);
     }
   }
-  read(
+  async read(
     tableName: string,
     id: string | number | bigint
   ): Promise<Record<string, any>> {
@@ -34,7 +34,8 @@ export class AxiosHttpAdapter extends HttpAdapter<Axios, AxiosRequestConfig> {
       throw this.parseError(e);
     }
   }
-  update(
+
+  async update(
     tableName: string,
     id: string | number,
     model: Record<string, any>
@@ -46,7 +47,8 @@ export class AxiosHttpAdapter extends HttpAdapter<Axios, AxiosRequestConfig> {
       throw this.parseError(e);
     }
   }
-  delete(
+
+  async delete(
     tableName: string,
     id: string | number | bigint
   ): Promise<Record<string, any>> {

@@ -1,0 +1,123 @@
+import { AxiosHttpAdapter } from "../../src";
+import { Axios } from "axios";
+import { HttpAdapter } from "../../src";
+import { HttpConfig } from "../../src";
+import { TestModel } from "./TestModel";
+import { Repository } from "@decaf-ts/core";
+import { RestService } from "../../src";
+import { IRepository } from "@decaf-ts/db-decorators";
+import { Model } from "@decaf-ts/decorator-validation";
+
+const cfg: HttpConfig = {
+  protocol: "http",
+  host: "localhost:8080",
+};
+
+Model.setBuilder(Model.fromModel);
+
+describe("Rest Service", () => {
+  let adapter: HttpAdapter<unknown, unknown>;
+  let repo: IRepository<TestModel>;
+
+  beforeAll(() => {
+    adapter = new AxiosHttpAdapter(new Axios(), cfg);
+    expect(adapter).toBeDefined();
+  });
+
+  let getMock: any;
+  let postMock: any;
+  let putMock: any;
+  let deleteMock: any;
+  let requestMock: any;
+
+  beforeEach(function () {
+    jest.clearAllMocks();
+    jest.resetAllMocks();
+    getMock = jest.spyOn(adapter.native as Axios, "get");
+    postMock = jest.spyOn(adapter.native as Axios, "post");
+    putMock = jest.spyOn(adapter.native as Axios, "put");
+    deleteMock = jest.spyOn(adapter.native as Axios, "delete");
+    requestMock = jest.spyOn(adapter.native as Axios, "request");
+  });
+
+  const model: TestModel = new TestModel({
+    id: "id",
+    name: "name",
+    age: 18,
+  });
+
+  it("finds the right repository", () => {
+    repo = Repository.forModel(TestModel);
+    expect(repo).toBeInstanceOf(RestService);
+  });
+
+  it("creates", async function () {
+    postMock.mockImplementation(
+      async (url: string, data: Record<string, unknown>) => {
+        return Object.assign({}, data);
+      }
+    );
+    const created = await repo.create(model);
+    expect(created).toBeDefined();
+    expect(postMock).toHaveBeenCalledTimes(1);
+    expect(postMock).toHaveBeenCalledWith(
+      `${cfg.protocol}://${cfg.host}/${Repository.table(TestModel)}`,
+      model
+    );
+    expect(created).toBeInstanceOf(TestModel);
+    expect(created.equals(model)).toBe(true);
+  });
+
+  it("reads", async function () {
+    getMock.mockImplementation(async (url: string) => {
+      return Object.assign({}, model);
+    });
+    const read = await repo.read(model.id);
+    expect(read).toBeDefined();
+    expect(getMock).toHaveBeenCalledTimes(1);
+    expect(getMock).toHaveBeenCalledWith(
+      encodeURI(
+        `${cfg.protocol}://${cfg.host}/${Repository.table(model)}?id=${model.id}`
+      )
+    );
+    expect(read).toBeInstanceOf(TestModel);
+    expect(read.equals(model)).toBe(true);
+  });
+
+  it("updates", async function () {
+    putMock.mockImplementation(
+      async (url: string, data: Record<string, unknown>) => {
+        return Object.assign({}, data);
+      }
+    );
+
+    const toUpdate = new TestModel(
+      Object.assign({}, model, { name: "updated" })
+    );
+
+    const updated = await repo.update(toUpdate);
+    expect(updated).toBeDefined();
+    expect(putMock).toHaveBeenCalledTimes(1);
+    expect(putMock).toHaveBeenCalledWith(
+      `${cfg.protocol}://${cfg.host}/${Repository.table(toUpdate)}`,
+      toUpdate
+    );
+
+    expect(updated).toBeInstanceOf(TestModel);
+    expect(updated.equals(toUpdate)).toBe(true);
+  });
+
+  it("deletes", async function () {
+    deleteMock.mockImplementation(async (url: string) => {
+      return Object.assign({}, model);
+    });
+    const deleted = await repo.delete(model.id);
+    expect(deleted).toBeDefined();
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(deleteMock).toHaveBeenCalledWith(
+      encodeURI(
+        `${cfg.protocol}://${cfg.host}/${Repository.table(model)}?id=${model.id}`
+      )
+    );
+  });
+});

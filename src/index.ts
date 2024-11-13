@@ -1,5 +1,8 @@
-export * from "./utils";
-export * from "./namespace";
+export * from "./adapter";
+export * from "./axios";
+export * from "./RestRepository";
+export * from "./RestService";
+export * from "./types";
 
 /**
  * @summary Module summary
