@@ -110,5 +110,10 @@
     "@decaf-ts/reflection": "latest",
     "axios": "^1.7.8",
     "reflect-metadata": "^0.2.1"
+  },
+  "overrides": {
+    "gulp-run-command": {
+      "cross-spawn": "^7.0.6"
+    }
   }
 }
