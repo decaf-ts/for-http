@@ -129,7 +129,7 @@ describe("RestRepository", function () {
       Object.assign({}, { id: model.id }, { name: "updated" })
     );
 
-    const updated = await repo.update(toUpdate);
+    updated = await repo.update(toUpdate);
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
