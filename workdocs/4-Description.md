@@ -1,11 +1,6 @@
-Defaults to module, but exports to CommonJS and ESM.
+### Description
 
-With documentation, update and release mechanisms and gitlab/github workflows to match;
+No one needs the hassle of setting up new repos every time.
 
-Defines a 'way' to write jsDocs to optimize the output
+Now you can create new repositories from this template and enjoy having everything set up for you.
 
-Optimized for github in terms of badges. CI is equivalent between Gitlab and Github.
-
-Auto setup on first `npm install`
-
-Will accept a `.token` file containing token valid for private npm dependencies, npm and docker registries

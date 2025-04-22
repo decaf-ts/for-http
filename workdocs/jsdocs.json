@@ -32,14 +32,18 @@
       "useLongnameInNav": false
     },
     "better-docs": {
-      "name": "for-http",
-      "title": "@decaf-ts/for-http",
+      "name": "http module",
+      "title": "Decaf's Http module",
       "hideGenerator": true,
       "useLongnameInNav": false,
       "navLinks": [
         {
+          "label": "Test Results",
+          "href": "workdocs/reports/html/test-report.html"
+        },
+        {
           "label": "Test Coverage",
-          "href": "workdocs/coverage"
+          "href": "workdocs/reports/coverage"
         },
         {
           "label": "Github Repository",
