@@ -1,18 +1,26 @@
 import {
   BulkCrudOperator,
+  Context,
   CrudOperator,
   findPrimaryKey,
   InternalError,
+  RepositoryFlags,
 } from "@decaf-ts/db-decorators";
 import { Constructor, Model } from "@decaf-ts/decorator-validation";
 import { Observable, Observer, Repository } from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
 
-export class RestService<M extends Model, Q, A extends HttpAdapter<unknown, Q>>
+export class RestService<
+    M extends Model,
+    Q,
+    A extends HttpAdapter<any, Q, F, C>,
+    F extends RepositoryFlags,
+    C extends Context<F> = Context<F>,
+  >
   implements CrudOperator<M>, BulkCrudOperator<M>, Observable
 {
   private readonly _class!: Constructor<M>;
-  private _pk!: string;
+  private _pk!: keyof M;
 
   get class() {
     if (!this._class)

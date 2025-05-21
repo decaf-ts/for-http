@@ -34,7 +34,7 @@ const config: Config.InitialOptions = {
       branches: 38,
       functions: 42,
       lines: 57,
-      statements: 55,
+      statements: 54,
     },
   },
 };

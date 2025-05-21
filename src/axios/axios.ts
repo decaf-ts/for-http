@@ -1,8 +1,15 @@
-import { HttpAdapter } from "./adapter";
+import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
-import { HttpConfig } from "./types";
+import { HttpConfig } from "../types";
+import { AxiosFlags } from "./types";
+import { Context } from "@decaf-ts/db-decorators";
 
-export class AxiosHttpAdapter extends HttpAdapter<Axios, AxiosRequestConfig> {
+export class AxiosHttpAdapter extends HttpAdapter<
+  Axios,
+  AxiosRequestConfig,
+  AxiosFlags,
+  Context<AxiosFlags>
+> {
   constructor(native: Axios, config: HttpConfig, flavour: string = "axios") {
     super(native as any, config, flavour);
   }
