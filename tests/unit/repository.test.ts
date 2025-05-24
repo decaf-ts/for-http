@@ -1,6 +1,7 @@
-import { AxiosHttpAdapter, HttpAdapter, HttpConfig } from "../../src";
+import { AxiosHttpAdapter } from "../../src/axios";
+import { HttpAdapter, HttpConfig } from "../../src";
 import { Axios } from "axios";
-import { Adapter, pk, Repository } from "@decaf-ts/core";
+import { pk, Repository } from "@decaf-ts/core";
 import { OperationKeys, timestamp } from "@decaf-ts/db-decorators";
 import {
   model,
@@ -42,8 +43,8 @@ class OtherTestModel extends Model {
 }
 
 describe("RestRepository", function () {
-  let adapter: HttpAdapter<unknown, unknown>;
-  let repo: RestRepository<OtherTestModel, unknown, Adapter<unknown, unknown>>;
+  let adapter: HttpAdapter<any, any>;
+  let repo: RestRepository<OtherTestModel, any, HttpAdapter<any, any>>;
 
   beforeAll(function () {
     adapter = new AxiosHttpAdapter(new Axios(), cfg);

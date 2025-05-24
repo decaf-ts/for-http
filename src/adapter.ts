@@ -1,64 +1,52 @@
 import {
   Adapter,
-  ClauseFactory,
   Condition,
   Repository,
   Sequence,
   SequenceOptions,
-  Statement,
   UnsupportedError,
 } from "@decaf-ts/core";
 import {
   BaseError,
   Context,
-  InternalError,
   OperationKeys,
   RepositoryFlags,
 } from "@decaf-ts/db-decorators";
-import { HttpConfig } from "./types";
+import { HttpConfig, HttpFlags } from "./types";
 import { Constructor, Model } from "@decaf-ts/decorator-validation";
 import { RestService } from "./RestService";
+import { Statement } from "@decaf-ts/core";
 
 export abstract class HttpAdapter<
   Y,
   Q,
-  F extends RepositoryFlags,
-  C extends Context<F>,
+  F extends HttpFlags = HttpFlags,
+  C extends Context<F> = Context<F>,
 > extends Adapter<Y, Q, F, C> {
   protected constructor(
     native: Y,
     protected config: HttpConfig,
-    flavour: string = "http"
+    flavour: string,
+    alias?: string
   ) {
-    super(native, flavour);
+    super(native, flavour, alias);
   }
 
-  async context<
-    M extends Model,
-    C extends Context<F>,
-    F extends RepositoryFlags,
-  >(
+  override flags<M extends Model>(
     operation:
       | OperationKeys.CREATE
       | OperationKeys.READ
       | OperationKeys.UPDATE
       | OperationKeys.DELETE,
-    overrides: Partial<F>,
-    model: Constructor<M>
-  ): Promise<C> {
-    return (await super.context(
-      operation,
-      Object.assign(
-        {
-          headers: {},
-        },
-        overrides
-      ),
-      model
-    )) as unknown as C;
+    model: Constructor<M>,
+    overrides: Partial<F>
+  ) {
+    return Object.assign(super.flags<M>(operation, model, overrides), {
+      headers: {},
+    });
   }
 
-  repository<M extends Model>(): Constructor<
+  override repository<M extends Model>(): Constructor<
     Repository<M, Q, HttpAdapter<Y, Q, F, C>>
   > {
     return RestService as unknown as Constructor<
@@ -96,27 +84,27 @@ export abstract class HttpAdapter<
 
   abstract request<V>(details: Q): Promise<V>;
 
-  abstract create(
+  abstract override create(
     tableName: string,
     id: string | number,
     model: Record<string, any>,
     ...args: any[]
   ): Promise<Record<string, any>>;
 
-  abstract read(
+  abstract override read(
     tableName: string,
     id: string | number | bigint,
     ...args: any[]
   ): Promise<Record<string, any>>;
 
-  abstract update(
+  abstract override update(
     tableName: string,
     id: string | number,
     model: Record<string, any>,
     ...args: any[]
   ): Promise<Record<string, any>>;
 
-  abstract delete(
+  abstract override delete(
     tableName: string,
     id: string | number | bigint,
     ...args: any[]
@@ -136,19 +124,15 @@ export abstract class HttpAdapter<
     );
   }
 
+  override Statement<M extends Model>(): Statement<Q, M, any> {
+    throw new UnsupportedError(
+      "Api is not natively available for HttpAdapters. If required, please extends this class"
+    );
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  parseCondition(condition: Condition): Q {
+  parseCondition(condition: Condition<any>): Q {
     throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
-    );
-  }
-  get Statement(): Statement<Q> {
-    throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
-    );
-  }
-  get Clauses(): ClauseFactory<Y, Q, typeof this> {
-    throw new InternalError(
       "Api is not natively available for HttpAdapters. If required, please extends this class"
     );
   }

@@ -1,4 +1,4 @@
-import { AxiosHttpAdapter } from "../../src";
+import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";

@@ -3,6 +3,7 @@ import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
 import { Context } from "@decaf-ts/db-decorators";
+import { AxiosFlavour } from "./constants";
 
 export class AxiosHttpAdapter extends HttpAdapter<
   Axios,
@@ -10,8 +11,8 @@ export class AxiosHttpAdapter extends HttpAdapter<
   AxiosFlags,
   Context<AxiosFlags>
 > {
-  constructor(native: Axios, config: HttpConfig, flavour: string = "axios") {
-    super(native as any, config, flavour);
+  constructor(native: Axios, config: HttpConfig, alias?: string) {
+    super(native as any, config, AxiosFlavour, alias);
   }
 
   override async request<V>(details: AxiosRequestConfig): Promise<V> {
@@ -66,4 +67,6 @@ export class AxiosHttpAdapter extends HttpAdapter<
       throw this.parseError(e);
     }
   }
+
+  static decoration() {}
 }
