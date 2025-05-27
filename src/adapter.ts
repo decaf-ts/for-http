@@ -6,12 +6,7 @@ import {
   SequenceOptions,
   UnsupportedError,
 } from "@decaf-ts/core";
-import {
-  BaseError,
-  Context,
-  OperationKeys,
-  RepositoryFlags,
-} from "@decaf-ts/db-decorators";
+import { BaseError, Context, OperationKeys } from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
 import { Constructor, Model } from "@decaf-ts/decorator-validation";
 import { RestService } from "./RestService";
