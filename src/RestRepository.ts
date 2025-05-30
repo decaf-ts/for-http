@@ -9,6 +9,8 @@ import { HttpFlags } from "./types";
  * @summary A specialized repository implementation for interacting with REST APIs.
  * This class extends the core Repository class and works with HTTP adapters to
  * provide CRUD operations for models via REST endpoints.
+ * This Is NOT the default repository for the HTTP adapter. That would be {@link RestService}.
+ * Use this only in the specific case of needing to run the CURD model logic (decoration) before submitting to the backend
  * @template M - The model type, extending Model
  * @template Q - The query type used by the adapter
  * @template A - The HTTP adapter type, extending HttpAdapter
@@ -24,11 +26,12 @@ import { HttpFlags } from "./types";
  *   host: 'api.example.com'
  * });
  * const userRepository = new RestRepository(axiosAdapter, User);
- * 
+ *
  * // Use the repository for CRUD operations
  * const user = await userRepository.findById('123');
  * ```
- * @class
+ * @class RestRepository
+ * @see {@link RestService}
  */
 export class RestRepository<
   M extends Model,

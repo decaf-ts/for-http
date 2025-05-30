@@ -31,15 +31,15 @@ import { HttpFlags } from "./types";
  *   host: 'api.example.com'
  * });
  * const userService = new RestService(axiosAdapter, User);
- * 
+ *
  * // Create a new user
  * const user = new User({ name: 'John Doe', email: 'john@example.com' });
  * const createdUser = await userService.create(user);
- * 
+ *
  * // Update a user
  * createdUser.name = 'Jane Doe';
  * const updatedUser = await userService.update(createdUser);
- * 
+ *
  * // Delete a user
  * await userService.delete(updatedUser.id);
  * ```
@@ -74,7 +74,7 @@ export class RestService<
    * @description Gets the primary key property name
    * @summary Retrieves the name of the primary key property for the model.
    * If not already determined, it finds the primary key using the model class.
-   * @return {keyof M} The primary key property name
+   * @return The primary key property name
    */
   get pk() {
     if (!this._pk) this._pk = findPrimaryKey(new this.class()).id;
@@ -112,6 +112,13 @@ export class RestService<
     return this._tableName;
   }
 
+  /**
+   * @description Initializes a new RestService instance
+   * @summary Creates a new service instance with the specified adapter and optional model class.
+   * The constructor stores the adapter and model class for later use in CRUD operations.
+   * @param {A} adapter - The HTTP adapter instance to use for API requests
+   * @param {Constructor<M>} [clazz] - Optional constructor for the model class
+   */
   constructor(adapter: A, clazz?: Constructor<M>) {
     this._adapter = adapter;
     if (clazz) this._class = clazz;
