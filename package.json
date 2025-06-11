@@ -71,7 +71,7 @@
     "ts"
   ],
   "author": "Tiago Venceslau",
-  "license": "LGPL-3.0-or-later",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/decaf-ts/for-http/issues"
   },
