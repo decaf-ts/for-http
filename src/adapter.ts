@@ -89,13 +89,13 @@ export abstract class HttpAdapter<
    * @summary Provides the RestService class as the repository implementation for this HTTP adapter.
    * This method is used to create repository instances that work with this adapter type.
    * @template M - The model type
-   * @return {Constructor<Repository<M, Q, HttpAdapter<Y, Q, F, C>>>} The repository constructor
+   * @return {Constructor<Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>>} The repository constructor
    */
   override repository<M extends Model>(): Constructor<
-    Repository<M, Q, HttpAdapter<Y, Q, F, C>>
+    Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>
   > {
     return RestService as unknown as Constructor<
-      Repository<M, Q, HttpAdapter<Y, Q, F, C>>
+      Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>
     >;
   }
 
