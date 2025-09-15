@@ -115,7 +115,8 @@ export abstract class HttpAdapter<
         url.searchParams.append(key, value.toString())
       );
 
-    return encodeURI(url.toString());
+    // ensure spaces are encoded as %20 (not '+') to match expectations
+    return encodeURI(url.toString()).replace(/\+/g, "%20");
   }
 
   /**
@@ -222,8 +223,10 @@ export abstract class HttpAdapter<
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   raw<R>(rawInput: Q, process: boolean, ...args: any[]): Promise<R> {
-    throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
+    return Promise.reject(
+      new UnsupportedError(
+        "Api is not natively available for HttpAdapters. If required, please extends this class"
+      )
     );
   }
 
@@ -238,8 +241,10 @@ export abstract class HttpAdapter<
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Sequence(options: SequenceOptions): Promise<Sequence> {
-    throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
+    return Promise.reject(
+      new UnsupportedError(
+        "Api is not natively available for HttpAdapters. If required, please extends this class"
+      )
     );
   }
 
