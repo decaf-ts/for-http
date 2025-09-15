@@ -2,9 +2,8 @@ import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import { Context, id } from "@decaf-ts/db-decorators";
+import { Context } from "@decaf-ts/db-decorators";
 import { AxiosFlavour } from "./constants";
-import { model } from "@decaf-ts/decorator-validation";
 
 /**
  * @description Axios implementation of the HTTP adapter

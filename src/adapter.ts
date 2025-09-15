@@ -26,6 +26,7 @@ import { Statement } from "@decaf-ts/core";
  * @param {HttpConfig} config - Configuration for the HTTP adapter
  * @param {string} flavour - The adapter flavor identifier
  * @param {string} [alias] - Optional alias for the adapter
+ * @class HttpAdapter
  * @example
  * ```typescript
  * // Example implementation with Axios
@@ -42,7 +43,6 @@ import { Statement } from "@decaf-ts/core";
  *   // Implement other abstract methods...
  * }
  * ```
- * @class
  */
 export abstract class HttpAdapter<
   Y extends HttpConfig,
