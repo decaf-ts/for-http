@@ -45,18 +45,14 @@ import { Statement } from "@decaf-ts/core";
  * @class
  */
 export abstract class HttpAdapter<
-  Y,
+  Y extends HttpConfig,
+  CON,
   Q,
   F extends HttpFlags = HttpFlags,
   C extends Context<F> = Context<F>,
-> extends Adapter<Y, Q, F, C> {
-  protected constructor(
-    native: Y,
-    protected config: HttpConfig,
-    flavour: string,
-    alias?: string
-  ) {
-    super(native, flavour, alias);
+> extends Adapter<Y, CON, Q, F, C> {
+  protected constructor(config: Y, flavour: string, alias?: string) {
+    super(config, flavour, alias);
   }
 
   /**
@@ -92,10 +88,10 @@ export abstract class HttpAdapter<
    * @return {Constructor<Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>>} The repository constructor
    */
   override repository<M extends Model>(): Constructor<
-    Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>
+    Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
   > {
     return RestService as unknown as Constructor<
-      Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>
+      Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
     >;
   }
 
@@ -136,18 +132,6 @@ export abstract class HttpAdapter<
       default:
         return err as BaseError;
     }
-  }
-
-  /**
-   * @description Initializes the HTTP adapter
-   * @summary Placeholder method for adapter initialization. This method is currently
-   * a no-op but can be overridden by subclasses to perform initialization tasks.
-   * @param {...any[]} args - Initialization arguments
-   * @return {Promise<void>} A promise that resolves when initialization is complete
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async initialize(...args: any[]): Promise<void> {
-    // do nothing
   }
 
   /**

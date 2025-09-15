@@ -43,11 +43,11 @@ class OtherTestModel extends Model {
 }
 
 describe("RestRepository", function () {
-  let adapter: HttpAdapter<any, any>;
-  let repo: RestRepository<OtherTestModel, any, HttpAdapter<any, any>>;
+  let adapter: HttpAdapter<any, any, any>;
+  let repo: RestRepository<OtherTestModel, any, HttpAdapter<any, any, any>>;
 
   beforeAll(function () {
-    adapter = new AxiosHttpAdapter(new Axios(), cfg);
+    adapter = new AxiosHttpAdapter(cfg);
     expect(adapter).toBeDefined();
     repo = new RestRepository(adapter, OtherTestModel);
   });
@@ -60,10 +60,10 @@ describe("RestRepository", function () {
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.native as Axios, "get");
-    postMock = jest.spyOn(adapter.native as Axios, "post");
-    putMock = jest.spyOn(adapter.native as Axios, "put");
-    deleteMock = jest.spyOn(adapter.native as Axios, "delete");
+    getMock = jest.spyOn(adapter.client as Axios, "get");
+    postMock = jest.spyOn(adapter.client as Axios, "post");
+    putMock = jest.spyOn(adapter.client as Axios, "put");
+    deleteMock = jest.spyOn(adapter.client as Axios, "delete");
   });
 
   const model: OtherTestModel = new OtherTestModel({

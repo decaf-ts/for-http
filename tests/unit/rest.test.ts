@@ -16,11 +16,11 @@ const cfg: HttpConfig = {
 Model.setBuilder(Model.fromModel);
 
 describe("Rest Service", () => {
-  let adapter: HttpAdapter<unknown, unknown>;
+  let adapter: HttpAdapter<any, unknown, unknown>;
   let repo: IRepository<TestModel>;
 
   beforeAll(() => {
-    adapter = new AxiosHttpAdapter(new Axios(), cfg);
+    adapter = new AxiosHttpAdapter(cfg);
     expect(adapter).toBeDefined();
   });
 
@@ -32,10 +32,10 @@ describe("Rest Service", () => {
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.native as Axios, "get");
-    postMock = jest.spyOn(adapter.native as Axios, "post");
-    putMock = jest.spyOn(adapter.native as Axios, "put");
-    deleteMock = jest.spyOn(adapter.native as Axios, "delete");
+    getMock = jest.spyOn(adapter.client as Axios, "get");
+    postMock = jest.spyOn(adapter.client as Axios, "post");
+    putMock = jest.spyOn(adapter.client as Axios, "put");
+    deleteMock = jest.spyOn(adapter.client as Axios, "delete");
   });
 
   const model: TestModel = new TestModel({

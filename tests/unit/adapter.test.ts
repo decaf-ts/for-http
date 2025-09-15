@@ -9,10 +9,10 @@ const cfg: HttpConfig = {
 };
 
 describe("Axios adapter", function () {
-  let adapter: HttpAdapter<unknown, unknown>;
+  let adapter: HttpAdapter<any, unknown, unknown>;
 
   beforeAll(function () {
-    adapter = new AxiosHttpAdapter(new Axios(), cfg);
+    adapter = new AxiosHttpAdapter(cfg);
     expect(adapter).toBeDefined();
   });
 
@@ -24,10 +24,10 @@ describe("Axios adapter", function () {
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.native as Axios, "get");
-    postMock = jest.spyOn(adapter.native as Axios, "post");
-    putMock = jest.spyOn(adapter.native as Axios, "put");
-    deleteMock = jest.spyOn(adapter.native as Axios, "delete");
+    getMock = jest.spyOn(adapter.client as Axios, "get");
+    postMock = jest.spyOn(adapter.client as Axios, "post");
+    putMock = jest.spyOn(adapter.client as Axios, "put");
+    deleteMock = jest.spyOn(adapter.client as Axios, "delete");
   });
 
   const tableName: string = "test";

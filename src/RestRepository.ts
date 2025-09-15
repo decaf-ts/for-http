@@ -36,7 +36,7 @@ import { HttpFlags } from "./types";
 export class RestRepository<
   M extends Model,
   Q,
-  A extends HttpAdapter<any, Q, F, C>,
+  A extends HttpAdapter<any, any, Q, F, C>,
   F extends HttpFlags = HttpFlags,
   C extends Context<F> = Context<F>,
 > extends Repository<M, Q, A> {

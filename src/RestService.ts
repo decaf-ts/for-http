@@ -48,7 +48,7 @@ import { HttpFlags } from "./types";
 export class RestService<
     M extends Model,
     Q,
-    A extends HttpAdapter<any, Q, F, C>,
+    A extends HttpAdapter<any, any, Q, F, C>,
     F extends HttpFlags = HttpFlags,
     C extends Context<F> = Context<F>,
   >
