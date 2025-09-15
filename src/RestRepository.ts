@@ -18,6 +18,7 @@ import { HttpFlags } from "./types";
  * @template C - The context type, extending Context<F>
  * @param {A} adapter - The HTTP adapter instance
  * @param {Constructor<M>} [clazz] - Optional constructor for the model class
+ * @class RestRepository
  * @example
  * ```typescript
  * // Create a repository for User model with Axios adapter
@@ -30,13 +31,12 @@ import { HttpFlags } from "./types";
  * // Use the repository for CRUD operations
  * const user = await userRepository.findById('123');
  * ```
- * @class RestRepository
  * @see {@link RestService}
  */
 export class RestRepository<
   M extends Model,
   Q,
-  A extends HttpAdapter<any, Q, F, C>,
+  A extends HttpAdapter<any, any, Q, F, C>,
   F extends HttpFlags = HttpFlags,
   C extends Context<F> = Context<F>,
 > extends Repository<M, Q, A> {

@@ -26,6 +26,7 @@ import { Statement } from "@decaf-ts/core";
  * @param {HttpConfig} config - Configuration for the HTTP adapter
  * @param {string} flavour - The adapter flavor identifier
  * @param {string} [alias] - Optional alias for the adapter
+ * @class HttpAdapter
  * @example
  * ```typescript
  * // Example implementation with Axios
@@ -42,21 +43,16 @@ import { Statement } from "@decaf-ts/core";
  *   // Implement other abstract methods...
  * }
  * ```
- * @class
  */
 export abstract class HttpAdapter<
-  Y,
+  Y extends HttpConfig,
+  CON,
   Q,
   F extends HttpFlags = HttpFlags,
   C extends Context<F> = Context<F>,
-> extends Adapter<Y, Q, F, C> {
-  protected constructor(
-    native: Y,
-    protected config: HttpConfig,
-    flavour: string,
-    alias?: string
-  ) {
-    super(native, flavour, alias);
+> extends Adapter<Y, CON, Q, F, C> {
+  protected constructor(config: Y, flavour: string, alias?: string) {
+    super(config, flavour, alias);
   }
 
   /**
@@ -92,10 +88,10 @@ export abstract class HttpAdapter<
    * @return {Constructor<Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>>} The repository constructor
    */
   override repository<M extends Model>(): Constructor<
-    Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>
+    Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
   > {
     return RestService as unknown as Constructor<
-      Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>
+      Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
     >;
   }
 
@@ -119,7 +115,8 @@ export abstract class HttpAdapter<
         url.searchParams.append(key, value.toString())
       );
 
-    return encodeURI(url.toString());
+    // ensure spaces are encoded as %20 (not '+') to match expectations
+    return encodeURI(url.toString()).replace(/\+/g, "%20");
   }
 
   /**
@@ -136,18 +133,6 @@ export abstract class HttpAdapter<
       default:
         return err as BaseError;
     }
-  }
-
-  /**
-   * @description Initializes the HTTP adapter
-   * @summary Placeholder method for adapter initialization. This method is currently
-   * a no-op but can be overridden by subclasses to perform initialization tasks.
-   * @param {...any[]} args - Initialization arguments
-   * @return {Promise<void>} A promise that resolves when initialization is complete
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async initialize(...args: any[]): Promise<void> {
-    // do nothing
   }
 
   /**
@@ -238,8 +223,10 @@ export abstract class HttpAdapter<
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   raw<R>(rawInput: Q, process: boolean, ...args: any[]): Promise<R> {
-    throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
+    return Promise.reject(
+      new UnsupportedError(
+        "Api is not natively available for HttpAdapters. If required, please extends this class"
+      )
     );
   }
 
@@ -254,8 +241,10 @@ export abstract class HttpAdapter<
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Sequence(options: SequenceOptions): Promise<Sequence> {
-    throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
+    return Promise.reject(
+      new UnsupportedError(
+        "Api is not natively available for HttpAdapters. If required, please extends this class"
+      )
     );
   }
 

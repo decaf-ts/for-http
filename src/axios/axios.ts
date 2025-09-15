@@ -21,10 +21,10 @@ import { AxiosFlavour } from "./constants";
  * ```typescript
  * import axios from 'axios';
  * import { AxiosHttpAdapter } from '@decaf-ts/for-http';
- * 
+ *
  * const config = { protocol: 'https', host: 'api.example.com' };
  * const adapter = new AxiosHttpAdapter(axios.create(), config);
- * 
+ *
  * // Use the adapter with a repository
  * const userRepo = adapter.getRepository(User);
  * const user = await userRepo.findById('123');
@@ -35,7 +35,7 @@ import { AxiosFlavour } from "./constants";
  *   participant AxiosHttpAdapter
  *   participant Axios
  *   participant API
- *   
+ *
  *   Client->>AxiosHttpAdapter: create(table, id, data)
  *   AxiosHttpAdapter->>AxiosHttpAdapter: url(table)
  *   AxiosHttpAdapter->>Axios: post(url, data)
@@ -43,7 +43,7 @@ import { AxiosFlavour } from "./constants";
  *   API-->>Axios: Response
  *   Axios-->>AxiosHttpAdapter: Response Data
  *   AxiosHttpAdapter-->>Client: Created Resource
- *   
+ *
  *   Client->>AxiosHttpAdapter: read(table, id)
  *   AxiosHttpAdapter->>AxiosHttpAdapter: url(table, {id})
  *   AxiosHttpAdapter->>Axios: get(url)
@@ -53,13 +53,18 @@ import { AxiosFlavour } from "./constants";
  *   AxiosHttpAdapter-->>Client: Resource Data
  */
 export class AxiosHttpAdapter extends HttpAdapter<
+  HttpConfig,
   Axios,
   AxiosRequestConfig,
   AxiosFlags,
   Context<AxiosFlags>
 > {
-  constructor(native: Axios, config: HttpConfig, alias?: string) {
-    super(native as any, config, AxiosFlavour, alias);
+  constructor(config: HttpConfig, alias?: string) {
+    super(config, AxiosFlavour, alias);
+  }
+
+  protected override getClient(): Axios {
+    return new Axios();
   }
 
   /**
@@ -71,7 +76,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @return {Promise<V>} A promise that resolves with the response data
    */
   override async request<V>(details: AxiosRequestConfig): Promise<V> {
-    return this.native.request(details);
+    return this.client.request(details);
   }
 
   /**
@@ -90,7 +95,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName);
-      return this.native.post(url, model);
+      return this.client.post(url, model);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -109,7 +114,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName, { id: id as string | number });
-      return this.native.get(url);
+      return this.client.get(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -131,7 +136,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName);
-      return this.native.put(url, model);
+      return this.client.put(url, model);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -151,16 +156,9 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName, { id: id as string | number });
-      return this.native.delete(url);
+      return this.client.delete(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
   }
-
-  /**
-   * @description Static decoration method for the AxiosHttpAdapter class
-   * @summary Placeholder method for class decoration functionality.
-   * This method is currently empty but can be used for decorator-based configuration.
-   */
-  static decoration() {}
 }

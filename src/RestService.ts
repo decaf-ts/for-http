@@ -23,6 +23,7 @@ import { HttpFlags } from "./types";
  * @template C - The context type, extending Context<F>
  * @param {A} adapter - The HTTP adapter instance
  * @param {Constructor<M>} [clazz] - Optional constructor for the model class
+ * @class RestService
  * @example
  * ```typescript
  * // Create a service for User model with Axios adapter
@@ -43,12 +44,24 @@ import { HttpFlags } from "./types";
  * // Delete a user
  * await userService.delete(updatedUser.id);
  * ```
- * @class
+ * @mermaid
+ * sequenceDiagram
+ *   participant Client
+ *   participant Service as RestService
+ *   participant Adapter as HttpAdapter
+ *   participant API
+ *   Client->>Service: create(model)
+ *   Service->>Adapter: prepare(model, pk)
+ *   Service->>Adapter: create(table, id, record)
+ *   Adapter->>API: HTTP POST
+ *   API-->>Adapter: 201 Created
+ *   Adapter-->>Service: record
+ *   Service-->>Client: revert(record)
  */
 export class RestService<
     M extends Model,
     Q,
-    A extends HttpAdapter<any, Q, F, C>,
+    A extends HttpAdapter<any, any, Q, F, C>,
     F extends HttpFlags = HttpFlags,
     C extends Context<F> = Context<F>,
   >
@@ -190,6 +203,16 @@ export class RestService<
    * @param {M[]} models - The model instances to create
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M[]>} A promise that resolves with an array of created model instances
+   * @mermaid
+   * sequenceDiagram
+   *   participant Client
+   *   participant Service as RestService
+   *   participant Adapter as HttpAdapter
+   *   Client->>Service: createAll(models)
+   *   Service->>Adapter: prepare(model, pk) x N
+   *   Service->>Adapter: createAll(table, ids[], records[])
+   *   Adapter-->>Service: records[]
+   *   Service-->>Client: revert(records[])
    */
   async createAll(models: M[], ...args: any[]): Promise<M[]> {
     if (!models.length) return models;

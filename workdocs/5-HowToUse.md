@@ -1,308 +1,213 @@
-### How to Use
+# How to Use decaf-ts/for-http
 
-- [Initial Setup](./workdocs/tutorials/For%20Developers.md#_initial-setup_)
-- [Installation](./workdocs/tutorials/For%20Developers.md#installation)
+Below are concise, non-repeating examples demonstrating how to use each public element of this library. All code samples are valid TypeScript.
 
-## Basic Usage
+Note: Examples assume your models are decorated with decaf-ts metadata (e.g., table names and primary keys) through @decaf-ts/decorator-validation and @decaf-ts/db-decorators. For brevity, model decoration details are omitted.
 
-### Setting Up an HTTP Adapter with Axios
+## Types: HttpConfig and HttpFlags
 
-```typescript
-import axios from 'axios';
-import { AxiosHttpAdapter } from '@decaf-ts/for-http';
+Description: Define the basic connection configuration and optional per-request headers.
 
-// Create an HTTP configuration
-const config = {
-  protocol: 'https',
-  host: 'api.example.com'
+```ts
+import { HttpConfig, HttpFlags } from "@decaf-ts/for-http";
+
+const config: HttpConfig = {
+  protocol: "https",
+  host: "api.example.com",
 };
 
-// Create an Axios HTTP adapter
-const httpAdapter = new AxiosHttpAdapter(axios.create(), config);
-```
-
-### Creating a Model Class
-
-```typescript
-import { Model } from '@decaf-ts/decorator-validation';
-
-class User extends Model {
-  id: string;
-  name: string;
-  email: string;
-
-  constructor(data?: Partial<User>) {
-    super();
-    Object.assign(this, data);
-  }
-}
-```
-
-### Using RestRepository for CRUD Operations
-
-```typescript
-import { RestRepository } from '@decaf-ts/for-http';
-
-// Create a repository for the User model
-const userRepository = new RestRepository(httpAdapter, User);
-
-// Create a new user
-const newUser = new User({
-  name: 'John Doe',
-  email: 'john@example.com'
-});
-const createdUser = await userRepository.create(newUser);
-
-// Read a user by ID
-const user = await userRepository.findById('123');
-
-// Update a user
-user.name = 'Jane Doe';
-await userRepository.update(user);
-
-// Delete a user
-await userRepository.delete('123');
-```
-
-### Using RestService for Advanced Operations
-
-```typescript
-import { RestService } from '@decaf-ts/for-http';
-
-// Create a service for the User model
-const userService = new RestService(httpAdapter, User);
-
-// Create a new user
-const newUser = new User({
-  name: 'John Doe',
-  email: 'john@example.com'
-});
-const createdUser = await userService.create(newUser);
-
-// Read a user by ID
-const user = await userService.read('123');
-
-// Update a user
-user.name = 'Jane Doe';
-await userService.update(user);
-
-// Delete a user
-await userService.delete('123');
-```
-
-### Bulk Operations with RestService
-
-```typescript
-import { RestService } from '@decaf-ts/for-http';
-
-// Create a service for the User model
-const userService = new RestService(httpAdapter, User);
-
-// Create multiple users
-const users = [
-  new User({ name: 'John Doe', email: 'john@example.com' }),
-  new User({ name: 'Jane Doe', email: 'jane@example.com' })
-];
-const createdUsers = await userService.createAll(users);
-
-// Read multiple users by ID
-const userIds = ['123', '456'];
-const fetchedUsers = await userService.readAll(userIds);
-
-// Update multiple users
-const usersToUpdate = [
-  new User({ id: '123', name: 'John Smith' }),
-  new User({ id: '456', name: 'Jane Smith' })
-];
-const updatedUsers = await userService.updateAll(usersToUpdate);
-
-// Delete multiple users
-await userService.deleteAll(['123', '456']);
-```
-
-### Using the Observer Pattern
-
-```typescript
-import { RestService } from '@decaf-ts/for-http';
-import { Observer } from '@decaf-ts/core';
-
-// Create a service for the User model
-const userService = new RestService(httpAdapter, User);
-
-// Create an observer
-const userObserver: Observer<User> = {
-  update: (user) => {
-    console.log('User updated:', user);
-  }
-};
-
-// Register the observer
-userService.observe(userObserver);
-
-// When operations are performed, observers will be notified
-await userService.create(new User({ name: 'John Doe' }));
-
-// Unregister the observer when done
-userService.unObserve(userObserver);
-```
-
-### Custom HTTP Adapter Implementation
-
-```typescript
-import { HttpAdapter } from '@decaf-ts/for-http';
-import { HttpConfig, HttpFlags } from '@decaf-ts/for-http';
-import { Context } from '@decaf-ts/db-decorators';
-import SomeHttpClient from 'some-http-client';
-
-// Create a custom HTTP adapter for a different HTTP client
-class CustomHttpAdapter extends HttpAdapter<
-  SomeHttpClient,
-  any,
-  HttpFlags,
-  Context<HttpFlags>
-> {
-  constructor(native: SomeHttpClient, config: HttpConfig, alias?: string) {
-    super(native, config, 'custom', alias);
-  }
-
-  async request<V>(details: any): Promise<V> {
-    return this.native.sendRequest(details);
-  }
-
-  async create(tableName: string, id: string | number, model: Record<string, any>): Promise<Record<string, any>> {
-    try {
-      const url = this.url(tableName);
-      return this.native.post(url, model);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  async read(tableName: string, id: string | number | bigint): Promise<Record<string, any>> {
-    try {
-      const url = this.url(tableName, { id: id as string | number });
-      return this.native.get(url);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  async update(tableName: string, id: string | number, model: Record<string, any>): Promise<Record<string, any>> {
-    try {
-      const url = this.url(tableName);
-      return this.native.put(url, model);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  async delete(tableName: string, id: string | number | bigint): Promise<Record<string, any>> {
-    try {
-      const url = this.url(tableName, { id: id as string | number });
-      return this.native.delete(url);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-}
-```
-
-### Using HTTP Flags for Request Configuration
-
-```typescript
-import { HttpFlags } from '@decaf-ts/for-http';
-
-// Create custom HTTP flags with headers
+// You can pass headers via flags (typically through a Context)
 const flags: HttpFlags = {
   headers: {
-    'Authorization': 'Bearer token123',
-    'Content-Type': 'application/json'
-  }
+    Authorization: "Bearer <token>",
+  },
 };
-
-// Use flags with repository operations
-const user = await userRepository.findById('123', { flags });
-
-// Use flags with service operations
-const createdUser = await userService.create(newUser, { flags });
 ```
 
-### Complete Application Example
+## Adapter: AxiosHttpAdapter
 
-```typescript
-import axios from 'axios';
-import { 
-  AxiosHttpAdapter, 
-  RestRepository, 
-  RestService, 
-  HttpConfig 
-} from '@decaf-ts/for-http';
-import { Model } from '@decaf-ts/decorator-validation';
+Description: Ready-to-use HTTP adapter based on Axios. Use it to interact with REST endpoints.
 
-// Define a model
-class Product extends Model {
-  id: string;
-  name: string;
-  price: number;
+```ts
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { HttpConfig } from "@decaf-ts/for-http";
 
-  constructor(data?: Partial<Product>) {
-    super();
-    Object.assign(this, data);
-  }
+const config: HttpConfig = { protocol: "https", host: "api.example.com" };
+const adapter = new AxiosHttpAdapter(config);
+```
+
+## Service: RestService
+
+Description: Lightweight, model-centric service that delegates CRUD and bulk operations to the adapter.
+
+```ts
+import { RestService } from "@decaf-ts/for-http";
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { HttpConfig } from "@decaf-ts/for-http";
+
+// Example model (assumes proper decaf-ts decorations elsewhere)
+class User {
+  id!: string;
+  name!: string;
 }
 
-// Configure the HTTP adapter
-const config: HttpConfig = {
-  protocol: 'https',
-  host: 'api.mystore.com'
-};
+const config: HttpConfig = { protocol: "https", host: "api.example.com" };
+const adapter = new AxiosHttpAdapter(config);
 
-// Create the adapter
-const adapter = new AxiosHttpAdapter(axios.create(), config);
+// Create a service bound to the User model
+const users = new RestService<User, any, typeof adapter>(adapter, User);
 
-// Create a repository
-const productRepo = new RestRepository(adapter, Product);
+// Create
+const created = await users.create({ id: "u1", name: "Alice" } as User);
 
-// Create a service
-const productService = new RestService(adapter, Product);
+// Read
+const found = await users.read("u1");
 
-// Example application
-async function manageProducts() {
-  try {
-    // Create a new product
-    const newProduct = new Product({
-      name: 'Smartphone',
-      price: 699.99
-    });
+// Update
+const updated = await users.update({ id: "u1", name: "Alice Cooper" } as User);
 
-    const createdProduct = await productRepo.create(newProduct);
-    console.log('Created product:', createdProduct);
+// Delete
+const removed = await users.delete("u1");
 
-    // Get all products
-    const products = await productRepo.findAll();
-    console.log('All products:', products);
+// Bulk create
+const many = await users.createAll([
+  { id: "u2", name: "Bob" } as User,
+  { id: "u3", name: "Carol" } as User,
+]);
 
-    // Update a product
-    createdProduct.price = 649.99;
-    const updatedProduct = await productService.update(createdProduct);
-    console.log('Updated product:', updatedProduct);
+// Bulk read
+const foundMany = await users.readAll(["u2", "u3"]);
 
-    // Delete a product
-    await productService.delete(createdProduct.id);
-    console.log('Product deleted');
+// Bulk update
+const updatedMany = await users.updateAll([
+  { id: "u2", name: "Bobby" } as User,
+  { id: "u3", name: "Caroline" } as User,
+]);
 
-    // Bulk operations
-    const bulkProducts = [
-      new Product({ name: 'Laptop', price: 1299.99 }),
-      new Product({ name: 'Tablet', price: 499.99 })
-    ];
+// Bulk delete
+const removedMany = await users.deleteAll(["u2", "u3"]);
+```
 
-    const createdProducts = await productService.createAll(bulkProducts);
-    console.log('Created multiple products:', createdProducts);
-  } catch (error) {
-    console.error('Error managing products:', error);
-  }
+## Repository: RestRepository
+
+Description: Use this when you need decaf-ts "repository" decoration logic to run before hitting the HTTP backend.
+
+```ts
+import { RestRepository } from "@decaf-ts/for-http";
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { HttpConfig } from "@decaf-ts/for-http";
+
+class Product {
+  id!: number;
+  title!: string;
 }
 
-manageProducts();
+const cfg: HttpConfig = { protocol: "https", host: "store.example.com" };
+const http = new AxiosHttpAdapter(cfg);
+
+// Create a repository for Product
+const products = new RestRepository<Product, any, typeof http>(http, Product);
+
+// Typical repository interactions
+const p = await products.findById(101);
+// ... other repository APIs as provided by @decaf-ts/core Repository
+```
+
+## Passing headers via flags/context
+
+Description: Supply headers for a specific operation using HttpFlags. These are typically carried inside a Context from @decaf-ts/db-decorators.
+
+```ts
+import { Context } from "@decaf-ts/db-decorators";
+import { OperationKeys } from "@decaf-ts/db-decorators";
+import { AxiosHttpAdapter, AxiosFlags } from "@decaf-ts/for-http/axios";
+import { RestService } from "@decaf-ts/for-http";
+
+class User { id!: string; name!: string; }
+
+const adapter = new AxiosHttpAdapter({ protocol: "https", host: "api.example.com" });
+const users = new RestService<User, any, typeof adapter>(adapter, User);
+
+// Generate flags for a READ operation (adds an empty headers obj you can override)
+const flags = adapter.flags<User>(OperationKeys.READ, User, { headers: { Authorization: "Bearer <token>" } });
+
+// Place flags into a context (shape depends on @decaf-ts/db-decorators; we cast here for example purposes)
+const ctx = { flags } as unknown as Context<AxiosFlags>;
+
+// Many decaf-ts operations accept an optional context/flags as the last argument
+const user = await users.read("u1", ctx);
+```
+
+## Subclassing: Custom HttpAdapter
+
+Description: Implement a custom adapter for a different HTTP client. You must implement request and CRUD methods at minimum.
+
+```ts
+import { HttpAdapter, HttpConfig, HttpFlags } from "@decaf-ts/for-http";
+import { Context } from "@decaf-ts/db-decorators";
+
+// Hypothetical client types
+type MyClient = { request: <T>(config: any) => Promise<T>; get: <T>(url: string) => Promise<T>; post: <T>(url: string, body: any) => Promise<T>; put: <T>(url: string, body: any) => Promise<T>; delete: <T>(url: string) => Promise<T>; };
+
+type MyRequestConfig = { url: string; method: "GET"|"POST"|"PUT"|"DELETE"; data?: any; headers?: Record<string,string>; };
+
+type MyFlags = HttpFlags;
+
+type MyContext = Context<MyFlags>;
+
+class MyHttpAdapter extends HttpAdapter<HttpConfig, MyClient, MyRequestConfig, MyFlags, MyContext> {
+  constructor(config: HttpConfig, alias?: string) { super(config, "my-client", alias); }
+
+  protected override getClient(): MyClient {
+    // create and return your HTTP client instance
+    return {
+      request: async <T>(c: any) => ({} as T),
+      get: async <T>(url: string) => ({} as T),
+      post: async <T>(url: string, body: any) => ({} as T),
+      put: async <T>(url: string, body: any) => ({} as T),
+      delete: async <T>(url: string) => ({} as T),
+    };
+  }
+
+  override async request<V>(details: MyRequestConfig): Promise<V> {
+    // bridge to your client’s request API
+    return this.client.request<V>(details);
+  }
+
+  async create(table: string, id: string|number, model: Record<string, any>): Promise<Record<string, any>> {
+    const url = this.url(table);
+    return this.client.post(url, model);
+  }
+
+  async read(table: string, id: string|number|bigint): Promise<Record<string, any>> {
+    const url = this.url(table, { id: id as string|number });
+    return this.client.get(url);
+  }
+
+  async update(table: string, id: string|number, model: Record<string, any>): Promise<Record<string, any>> {
+    const url = this.url(table);
+    return this.client.put(url, model);
+  }
+
+  async delete(table: string, id: string|number|bigint): Promise<Record<string, any>> {
+    const url = this.url(table, { id: id as string|number });
+    return this.client.delete(url);
+  }
+
+  // Optionally override parseError(err) to normalize client-specific errors
+}
+```
+
+## Constants and Types (axios)
+
+Description: Utilities specific to the Axios implementation.
+
+```ts
+import { AxiosFlavour, AxiosFlags } from "@decaf-ts/for-http/axios";
+
+// AxiosFlavour is the adapter flavour identifier string: "axios"
+console.log(AxiosFlavour);
+
+// AxiosFlags is a type alias of HttpFlags; useful for contexts with Axios
+const f: AxiosFlags = { headers: { "X-Trace": "1" } };
 ```
