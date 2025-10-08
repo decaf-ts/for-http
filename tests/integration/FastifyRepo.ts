@@ -18,6 +18,7 @@ import {
   ModelArg,
   required,
 } from "@decaf-ts/decorator-validation";
+/* eslint-disable @typescript-eslint/no-unused-vars */
 
 @table("users")
 @model()
