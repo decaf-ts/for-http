@@ -109,7 +109,7 @@ describe("RestRepository", function () {
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
       encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Repository.table(model)}?id=${model.id}`
+        `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}?id=${model.id}`
       )
     );
     expect(read).toBeInstanceOf(OtherTestModel);
@@ -135,7 +135,7 @@ describe("RestRepository", function () {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Repository.table(toUpdate)}`,
+      `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}`,
       updated
     );
 
@@ -158,7 +158,7 @@ describe("RestRepository", function () {
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
       encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Repository.table(model)}?id=${model.id}`
+        `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}?id=${model.id}`
       )
     );
   });

@@ -43,4 +43,8 @@ export class RestRepository<
   constructor(adapter: A, clazz?: Constructor<M>) {
     super(adapter, clazz);
   }
+
+  async request<V>(details: Q) {
+    return this.adapter.request<V>(details);
+  }
 }

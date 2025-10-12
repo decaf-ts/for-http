@@ -1,11 +1,17 @@
 import { HttpAdapter } from "../../src/adapter";
 import { RestService } from "../../src/RestService";
 import { UnsupportedError } from "@decaf-ts/core";
-import { Context } from "@decaf-ts/db-decorators";
+import { BaseError, Context, InternalError } from "@decaf-ts/db-decorators";
 import type { HttpConfig, HttpFlags } from "../../src/types";
 import { Model } from "@decaf-ts/decorator-validation";
 
-class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, HttpFlags, Context<HttpFlags>> {
+class TestHttpAdapter extends HttpAdapter<
+  HttpConfig,
+  any,
+  any,
+  HttpFlags,
+  Context<HttpFlags>
+> {
   constructor(config: HttpConfig, alias?: string) {
     super(config, "test-http", alias);
   }
@@ -15,22 +21,40 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, HttpFlags, Conte
   override async request<V>(details: any): Promise<V> {
     return details as V;
   }
-  async create(tableName: string, id: string | number, model: Record<string, any>): Promise<Record<string, any>> {
+  async create(
+    tableName: string,
+    id: string | number,
+    model: Record<string, any>
+  ): Promise<Record<string, any>> {
     return { tableName, id, ...model };
   }
-  async read(tableName: string, id: string | number | bigint): Promise<Record<string, any>> {
+  async read(
+    tableName: string,
+    id: string | number | bigint
+  ): Promise<Record<string, any>> {
     return { tableName, id } as any;
   }
-  async update(tableName: string, id: string | number, model: Record<string, any>): Promise<Record<string, any>> {
+  async update(
+    tableName: string,
+    id: string | number,
+    model: Record<string, any>
+  ): Promise<Record<string, any>> {
     return { tableName, id, ...model };
   }
-  async delete(tableName: string, id: string | number | bigint): Promise<Record<string, any>> {
+  async delete(
+    tableName: string,
+    id: string | number | bigint
+  ): Promise<Record<string, any>> {
     return { tableName, id } as any;
   }
   // expose protected url for testing
   public buildUrl(tableName: string, query?: Record<string, string | number>) {
     // @ts-expect-error accessing protected
     return super.url(tableName, query);
+  }
+
+  override parseError(err: Error): BaseError {
+    return new InternalError(err.message);
   }
 }
 
@@ -52,21 +76,27 @@ describe("HttpAdapter base features", () => {
     expect(base).toBe("https://api.example.com/users");
 
     const withQuery = adapter.buildUrl("search", { q: "John Doe", page: 2 });
-    expect(withQuery).toBe("https://api.example.com/search?q=John%20Doe&page=2");
+    expect(withQuery).toBe(
+      "https://api.example.com/search?q=John%20Doe&page=2"
+    );
   });
 
-  test("parseError() should pass through errors as BaseError", () => {
+  test("parseError() should pass through errors as InternalError", () => {
     const err = new Error("boom");
     const parsed = adapter.parseError(err);
-    expect(parsed).toBe(err);
+    expect(parsed.message).toBe(`[InternalError] ${err.message}`);
   });
 
   test("raw() should throw UnsupportedError", async () => {
-    await expect(adapter.raw<any>({} as any, true)).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(adapter.raw<any>({} as any, true)).rejects.toBeInstanceOf(
+      UnsupportedError
+    );
   });
 
   test("Sequence() should throw UnsupportedError", async () => {
-    await expect(adapter.Sequence({ start: 1, step: 1 })).rejects.toBeInstanceOf(UnsupportedError);
+    await expect(
+      adapter.Sequence({ start: 1, step: 1 })
+    ).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   test("Statement() should throw UnsupportedError", () => {

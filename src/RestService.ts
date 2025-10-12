@@ -208,6 +208,10 @@ export class RestService<
     return this.adapter.revert(m, this.class, this.pk, id);
   }
 
+  async request<V>(details: Q) {
+    return this.adapter.request<V>(details);
+  }
+
   /**
    * @description Creates multiple resources
    * @summary Creates multiple resources in the REST API using the provided models.

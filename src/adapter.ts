@@ -7,12 +7,7 @@ import {
   SequenceOptions,
   UnsupportedError,
 } from "@decaf-ts/core";
-import {
-  BaseError,
-  Context,
-  InternalError,
-  OperationKeys,
-} from "@decaf-ts/db-decorators";
+import { Context, InternalError, OperationKeys } from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
 import { Constructor, Model } from "@decaf-ts/decorator-validation";
 import { RestService } from "./RestService";
@@ -205,22 +200,6 @@ export abstract class HttpAdapter<
 
     // ensure spaces are encoded as %20 (not '+') to match expectations
     return encodeURI(url.toString()).replace(/\+/g, "%20");
-  }
-
-  /**
-   * @description Parses and converts errors to BaseError type
-   * @summary Processes errors that occur during HTTP operations and converts them to
-   * the appropriate BaseError type. Currently returns the error as-is, but can be
-   * extended to handle specific error messages differently.
-   * @param {Error} err - The error to parse
-   * @return {BaseError} The parsed error as a BaseError
-   */
-  parseError(err: Error): BaseError {
-    const { message } = err;
-    switch (message) {
-      default:
-        return err as BaseError;
-    }
   }
 
   /**

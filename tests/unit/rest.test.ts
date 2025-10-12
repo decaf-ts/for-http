@@ -58,8 +58,9 @@ describe("Rest Service", () => {
     const created = await repo.create(model);
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
+    const table = Repository.table(TestModel);
     expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Repository.table(TestModel)}`,
+      `${cfg.protocol}://${cfg.host}/${table}`,
       model
     );
     expect(created).toBeInstanceOf(TestModel);
@@ -74,10 +75,10 @@ describe("Rest Service", () => {
     const read = await repo.read(model.id);
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
+    const table = Repository.table(TestModel);
+
     expect(getMock).toHaveBeenCalledWith(
-      encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Repository.table(model)}?id=${model.id}`
-      )
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
     );
     expect(read).toBeInstanceOf(TestModel);
     expect(read.equals(model)).toBe(true);
@@ -98,7 +99,7 @@ describe("Rest Service", () => {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Repository.table(toUpdate)}`,
+      `${cfg.protocol}://${cfg.host}/${Repository.table(TestModel)}`,
       toUpdate
     );
 
@@ -116,7 +117,7 @@ describe("Rest Service", () => {
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
       encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Repository.table(model)}?id=${model.id}`
+        `${cfg.protocol}://${cfg.host}/${Repository.table(TestModel)}?id=${model.id}`
       )
     );
   });

@@ -2,8 +2,15 @@ import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import { Context } from "@decaf-ts/db-decorators";
+import {
+  BaseError,
+  ConflictError,
+  Context,
+  InternalError,
+  NotFoundError,
+} from "@decaf-ts/db-decorators";
 import { AxiosFlavour } from "./constants";
+import { AuthorizationError, UnsupportedError } from "@decaf-ts/core";
 
 /**
  * @description Axios implementation of the HTTP adapter
@@ -160,5 +167,20 @@ export class AxiosHttpAdapter extends HttpAdapter<
     } catch (e: any) {
       throw this.parseError(e);
     }
+  }
+
+  override parseError(err: Error): BaseError {
+    const errs = [
+      InternalError,
+      AuthorizationError,
+      ConflictError,
+      NotFoundError,
+      UnsupportedError,
+    ];
+    for (const error of errs) {
+      if ((err as Error).message.includes(error.name))
+        return new error(err.message);
+    }
+    return new InternalError(err.message);
   }
 }
