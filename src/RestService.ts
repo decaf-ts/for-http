@@ -150,6 +150,10 @@ export class RestService<
     if (clazz) this._class = clazz;
   }
 
+  url(path: string, queryParams?: Record<string, string | number>) {
+    return this.adapter.url(path, queryParams);
+  }
+
   /**
    * @description Creates a new resource
    * @summary Creates a new resource in the REST API using the provided model.

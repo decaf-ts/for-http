@@ -186,10 +186,7 @@ export abstract class HttpAdapter<
    * @param {Record<string, string | number>} [queryParams] - Optional query parameters
    * @return {string} The encoded URL string
    */
-  protected url(
-    tableName: string,
-    queryParams?: Record<string, string | number>
-  ) {
+  url(tableName: string, queryParams?: Record<string, string | number>) {
     const url = new URL(
       `${this.config.protocol}://${this.config.host}/${tableName}`
     );

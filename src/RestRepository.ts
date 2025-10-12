@@ -44,6 +44,10 @@ export class RestRepository<
     super(adapter, clazz);
   }
 
+  url(path: string, queryParams?: Record<string, string | number>) {
+    return this.adapter.url(path, queryParams);
+  }
+
   async request<V>(details: Q) {
     return this.adapter.request<V>(details);
   }
