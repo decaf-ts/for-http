@@ -9,6 +9,7 @@ import { Constructor, Model } from "@decaf-ts/decorator-validation";
 import { Observable, Observer, Repository } from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
 import { HttpFlags } from "./types";
+import { LoggedClass, Logger } from "@decaf-ts/logging";
 
 /**
  * @description Service class for REST API operations
@@ -65,10 +66,13 @@ export class RestService<
     F extends HttpFlags = HttpFlags,
     C extends Context<F> = Context<F>,
   >
+  extends LoggedClass
   implements CrudOperator<M>, BulkCrudOperator<M>, Observable
 {
   private readonly _class!: Constructor<M>;
   private _pk!: keyof M;
+
+  private logger?: Logger;
 
   /**
    * @description Gets the model class constructor
@@ -81,6 +85,14 @@ export class RestService<
     if (!this._class)
       throw new InternalError("No class definition found for this repository");
     return this._class;
+  }
+
+  protected override get log(): Logger {
+    if (!this.logger)
+      this.logger = (
+        this.adapter["log" as keyof typeof this.adapter] as Logger
+      ).for(this.toString());
+    return this.logger;
   }
 
   /**
@@ -133,6 +145,7 @@ export class RestService<
    * @param {Constructor<M>} [clazz] - Optional constructor for the model class
    */
   constructor(adapter: A, clazz?: Constructor<M>) {
+    super();
     this._adapter = adapter;
     if (clazz) this._class = clazz;
   }
@@ -327,5 +340,9 @@ export class RestService<
           `Failed to update observable ${this.observers[i]}: ${result.reason}`
         );
     });
+  }
+
+  override toString(): string {
+    return `${this.class.name} rest service`;
   }
 }

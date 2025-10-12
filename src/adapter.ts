@@ -1,12 +1,18 @@
 import {
   Adapter,
   Condition,
+  PersistenceKeys,
   Repository,
   Sequence,
   SequenceOptions,
   UnsupportedError,
 } from "@decaf-ts/core";
-import { BaseError, Context, OperationKeys } from "@decaf-ts/db-decorators";
+import {
+  BaseError,
+  Context,
+  InternalError,
+  OperationKeys,
+} from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
 import { Constructor, Model } from "@decaf-ts/decorator-validation";
 import { RestService } from "./RestService";
@@ -93,6 +99,88 @@ export abstract class HttpAdapter<
     return RestService as unknown as Constructor<
       Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
     >;
+  }
+
+  /**
+   * @description Prepares a model for persistence
+   * @summary Converts a model instance into a format suitable for database storage,
+   * handling column mapping and separating transient properties
+   * @template M - The model type
+   * @param {M} model - The model instance to prepare
+   * @param pk - The primary key property name
+   * @return The prepared data
+   */
+  override prepare<M extends Model>(
+    model: M,
+    pk: keyof M
+  ): {
+    record: Record<string, any>;
+    id: string;
+    transient?: Record<string, any>;
+  } {
+    const log = this.log.for(this.prepare);
+    const result = Object.assign({}, model);
+    if ((model as any)[PersistenceKeys.METADATA]) {
+      log.silly(
+        `Passing along persistence metadata for ${(model as any)[PersistenceKeys.METADATA]}`
+      );
+      Object.defineProperty(result, PersistenceKeys.METADATA, {
+        enumerable: false,
+        writable: false,
+        configurable: true,
+        value: (model as any)[PersistenceKeys.METADATA],
+      });
+    }
+
+    return {
+      record: model,
+      id: model[pk] as string,
+    };
+  }
+
+  /**
+   * @description Converts database data back into a model instance
+   * @summary Reconstructs a model instance from database data, handling column mapping
+   * and reattaching transient properties
+   * @template M - The model type
+   * @param obj - The database record
+   * @param {string|Constructor<M>} clazz - The model class or name
+   * @param pk - The primary key property name
+   * @param {string|number|bigint} id - The primary key value
+   * @return {M} The reconstructed model instance
+   */
+  override revert<M extends Model>(
+    obj: Record<string, any>,
+    clazz: string | Constructor<M>,
+    pk: keyof M,
+    id: string | number | bigint
+  ): M {
+    const log = this.log.for(this.revert);
+    const ob: Record<string, any> = {};
+    const m = (
+      typeof clazz === "string" ? Model.build(ob, clazz) : new clazz(ob)
+    ) as M;
+    log.silly(`Rebuilding model ${m.constructor.name} id ${id}`);
+    const constr = typeof clazz === "string" ? Model.get(clazz) : clazz;
+    if (!constr)
+      throw new InternalError(
+        `Failed to retrieve model constructor for ${clazz}`
+      );
+    const result = new (constr as Constructor<M>)(obj);
+    const metadata = obj[PersistenceKeys.METADATA];
+    if (metadata) {
+      log.silly(
+        `Passing along ${this.flavour} persistence metadata for ${m.constructor.name} id ${id}: ${metadata}`
+      );
+      Object.defineProperty(result, PersistenceKeys.METADATA, {
+        enumerable: false,
+        configurable: false,
+        writable: false,
+        value: metadata,
+      });
+    }
+
+    return result;
   }
 
   /**

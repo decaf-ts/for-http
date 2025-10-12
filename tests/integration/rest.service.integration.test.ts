@@ -4,7 +4,13 @@ import type { HttpConfig, HttpFlags } from "../../src/types";
 import { Context, InternalError, id } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, prop, model } from "@decaf-ts/decorator-validation";
 
-class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, HttpFlags, Context<HttpFlags>> {
+class TestHttpAdapter extends HttpAdapter<
+  HttpConfig,
+  any,
+  any,
+  HttpFlags,
+  Context<HttpFlags>
+> {
   constructor(config: HttpConfig, alias?: string) {
     super(config, "test-http", alias);
   }
@@ -14,16 +20,30 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, HttpFlags, Conte
   override async request<V>(details: any): Promise<V> {
     return details as V;
   }
-  async create(tableName: string, id: string | number, model: Record<string, any>): Promise<Record<string, any>> {
+  async create(
+    tableName: string,
+    id: string | number,
+    model: Record<string, any>
+  ): Promise<Record<string, any>> {
     return { ...model, created: true };
   }
-  async read(tableName: string, id: string | number | bigint): Promise<Record<string, any>> {
+  async read(
+    tableName: string,
+    id: string | number | bigint
+  ): Promise<Record<string, any>> {
     return { id, tableName } as any;
   }
-  async update(tableName: string, id: string | number, model: Record<string, any>): Promise<Record<string, any>> {
+  async update(
+    tableName: string,
+    id: string | number,
+    model: Record<string, any>
+  ): Promise<Record<string, any>> {
     return { ...model, updated: true };
   }
-  async delete(tableName: string, id: string | number | bigint): Promise<Record<string, any>> {
+  async delete(
+    tableName: string,
+    id: string | number | bigint
+  ): Promise<Record<string, any>> {
     return { id, deleted: true } as any;
   }
 }
@@ -37,8 +57,7 @@ class Dummy extends Model {
   name?: string;
 
   constructor(obj?: ModelArg<Dummy>) {
-    super();
-    Model.fromObject(this, obj);
+    super(obj);
   }
 }
 
@@ -80,7 +99,10 @@ describe("RestService integration", () => {
 
   test("Bulk operations createAll/readAll/updateAll/deleteAll", async () => {
     const svc = new RestService<Dummy, any, any>(adapter as any, Dummy);
-    const models = [new Dummy({ id: "1", name: "a" }), new Dummy({ id: "2", name: "b" })];
+    const models = [
+      new Dummy({ id: "1", name: "a" }),
+      new Dummy({ id: "2", name: "b" }),
+    ];
 
     const created = await svc.createAll(models);
     expect(created).toHaveLength(2);
@@ -100,8 +122,14 @@ describe("RestService integration", () => {
     const svc = new RestService<Dummy, any, any>(adapter as any, Dummy);
 
     const calls: any[] = [];
-    const okObserver = { refresh: async (...args: any[]) => calls.push(["ok", args]) };
-    const badObserver = { refresh: async () => { throw new Error("nope"); } };
+    const okObserver = {
+      refresh: async (...args: any[]) => calls.push(["ok", args]),
+    };
+    const badObserver = {
+      refresh: async () => {
+        throw new Error("nope");
+      },
+    };
 
     svc.observe(okObserver as any);
     // duplicate should throw

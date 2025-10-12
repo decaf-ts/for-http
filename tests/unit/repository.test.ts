@@ -1,8 +1,7 @@
 import { AxiosHttpAdapter } from "../../src/axios";
 import { HttpAdapter, HttpConfig } from "../../src";
 import { Axios } from "axios";
-import { pk, Repository } from "@decaf-ts/core";
-import { OperationKeys, timestamp } from "@decaf-ts/db-decorators";
+import { createdAt, pk, Repository, updatedAt } from "@decaf-ts/core";
 import {
   model,
   Model,
@@ -12,6 +11,8 @@ import {
 } from "@decaf-ts/decorator-validation";
 import { RestRepository } from "../../src";
 
+import { TimestampValidator } from "@decaf-ts/db-decorators";
+console.log(TimestampValidator);
 const cfg: HttpConfig = {
   protocol: "http",
   host: "localhost:8080",
@@ -21,7 +22,7 @@ Model.setBuilder(Model.fromModel);
 
 @model()
 class OtherTestModel extends Model {
-  @pk()
+  @pk({ type: "Number" })
   id!: number;
 
   @required()
@@ -31,11 +32,11 @@ class OtherTestModel extends Model {
   @step(1)
   age!: number;
 
-  @timestamp([OperationKeys.CREATE])
-  createdOn!: Date;
+  @createdAt()
+  createdAt!: Date;
 
-  @timestamp()
-  updatedOn!: Date;
+  @updatedAt()
+  updatedAt!: Date;
 
   constructor(arg?: ModelArg<OtherTestModel>) {
     super(arg);
@@ -95,7 +96,7 @@ describe("RestRepository", function () {
     );
     expect(created).toBeInstanceOf(OtherTestModel);
     expect(created.equals(model)).toBe(false);
-    expect(created.equals(model, "createdOn", "updatedOn")).toBe(true);
+    expect(created.equals(model, "createdAt", "updatedAt")).toBe(true);
   });
 
   it("reads", async function () {
@@ -140,7 +141,7 @@ describe("RestRepository", function () {
 
     expect(updated).toBeInstanceOf(OtherTestModel);
     expect(updated.equals(created)).toBe(false);
-    expect(updated.equals(created, "updatedOn", "name")).toBe(true);
+    expect(updated.equals(created, "updatedAt", "name")).toBe(true);
   });
 
   it("deletes", async function () {
