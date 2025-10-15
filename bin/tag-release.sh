@@ -79,7 +79,7 @@ GIT_USER=$(git config user.name)
 REMOTE_URL=$(git remote get-url origin)
 
 if [[ "$(cat .token)" ]]; then
-  git push -u "https://${GIT_USER}:$(cat .token)@${REMOTE_URL#https://}" master --follow-tags
+  git push -u "https://${GIT_USER}:$(cat .token)@${REMOTE_URL#https://}" --follow-tags
 else
   git push --follow-tags
 fi
