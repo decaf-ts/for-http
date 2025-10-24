@@ -1,4 +1,4 @@
-![Banner](./assets/Banner.png)
+![Banner](./workdocs/assets/decaf-logo.svg)
 
 # decaf-ts/for-http
 
