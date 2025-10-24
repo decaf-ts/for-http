@@ -1,0 +1,201 @@
+{
+  "for-http": [
+    {
+      "Slogan": "Decaf‑TS for HTTP: Sip APIs, not jitters.",
+      "Tags": "HTTP, Calm, Coffee-themed"
+    },
+    {
+      "Slogan": "REST endpoints so smooth you’d call them latte‑level.",
+      "Tags": "REST, Coffee-themed, Fun"
+    },
+    {
+      "Slogan": "Brewed for your API layer: no caffeine required.",
+      "Tags": "API, Coffee-themed, Calm"
+    },
+    {
+      "Slogan": "CRUD like you’re lounging in a café, not sprinting in a tunnel.",
+      "Tags": "CRUD, Relaxed, Coffee-themed"
+    },
+    {
+      "Slogan": "Axios ready, decaf steady — HTTP done right.",
+      "Tags": "Axios, Technical, Coffee-themed"
+    },
+    {
+      "Slogan": "Don’t rush the request — enjoy the brew of connectivity.",
+      "Tags": "HTTP, Chill, Wordplay"
+    },
+    {
+      "Slogan": "HTTP adapter: the decaf version of your backend connection.",
+      "Tags": "Adapter, Chill, Backend"
+    },
+    {
+      "Slogan": "Calm APIs, clean code, zero caffeine crash.",
+      "Tags": "API, Calm, Productivity"
+    },
+    {
+      "Slogan": "When your endpoints move slower than your coffee sip, you’re doing it right.",
+      "Tags": "Endpoints, Funny, Coffee-themed"
+    },
+    {
+      "Slogan": "Restful, restful, and restful. Yes, three times.",
+      "Tags": "REST, Funny, Repetition"
+    },
+    {
+      "Slogan": "Let your HTTP calls mellow like a smooth decaf mocha.",
+      "Tags": "HTTP, Coffee-themed, Chill"
+    },
+    {
+      "Slogan": "Requests that won’t wake you at 3 AM with errors.",
+      "Tags": "Debugging, Calm, Humor"
+    },
+    {
+      "Slogan": "Say goodbye to shaky connections. Hello, decaf stability.",
+      "Tags": "Stability, Coffee-themed, Fun"
+    },
+    {
+      "Slogan": "Your REST wrapper with zero jitter and maximum chill.",
+      "Tags": "REST, Calm, Adapter"
+    },
+    {
+      "Slogan": "From endpoint to espresso‑style calm.",
+      "Tags": "Endpoints, Coffee-themed, Chill"
+    },
+    {
+      "Slogan": "Because your API deserves more than an energy drink.",
+      "Tags": "API, Humor, Coffee-themed"
+    },
+    {
+      "Slogan": "HTTP adapter: full flavour, no jitters, all productivity.",
+      "Tags": "Adapter, Productive, Coffee-themed"
+    },
+    {
+      "Slogan": "We turned down the caffeine in your HTTP layer so your code can stay calm.",
+      "Tags": "HTTP, Calm, Humor"
+    },
+    {
+      "Slogan": "Decaf‑TS for HTTP — where major code meets mellow endpoints.",
+      "Tags": "Endpoints, Chill, Technical"
+    },
+    {
+      "Slogan": "Sip your coffee while the adapter handles the heavy lifting.",
+      "Tags": "Developer, Coffee-themed, Calm"
+    },
+    {
+      "Slogan": "Settle into the couch of HTTP adapters: decaf‑level comfort.",
+      "Tags": "Couch, Adapter, Coffee-themed"
+    },
+    {
+      "Slogan": "Don’t sprint your API calls — stroll them with style.",
+      "Tags": "API, Humor, Chill"
+    },
+    {
+      "Slogan": "Relaxed REST, de‑caffeinated connections, serious developer delight.",
+      "Tags": "REST, Developer, Coffee-themed"
+    },
+    {
+      "Slogan": "No crash after deploy: the adapter version of decaf.",
+      "Tags": "Adapter, Calm, Deploy"
+    },
+    {
+      "Slogan": "Transport your models over HTTP, not over a roller‑coaster.",
+      "Tags": "HTTP, Humor, Models"
+    },
+    {
+      "Slogan": "When your backend is chill, you can brew your coffee in peace.",
+      "Tags": "Backend, Calm, Coffee-themed"
+    },
+    {
+      "Slogan": "Let your API layer take a nap while you build features.",
+      "Tags": "API, Relaxed, Developer"
+    },
+    {
+      "Slogan": "Adapter so smooth you’ll forget you’re even using HTTP.",
+      "Tags": "Adapter, Smooth, Chill"
+    },
+    {
+      "Slogan": "From create to delete without the caffeine shakes.",
+      "Tags": "CRUD, Coffee-themed, Humor"
+    },
+    {
+      "Slogan": "Zero boilerplate, all flavor — decaf‑style HTTP.",
+      "Tags": "Boilerplate, Fun, Coffee-themed"
+    },
+    {
+      "Slogan": "Plug in your models; the adapter takes it from there (silently, calmly).",
+      "Tags": "Models, Adapter, Chill"
+    },
+    {
+      "Slogan": "HTTP calls that whisper, not shout.",
+      "Tags": "HTTP, Humor, Calm"
+    },
+    {
+      "Slogan": "Requests go out; responses come back; developer stays sane.",
+      "Tags": "HTTP, DX, Humor"
+    },
+    {
+      "Slogan": "We took the buzz out of HTTP so you can focus on logic.",
+      "Tags": "HTTP, Calm, Coffee-themed"
+    },
+    {
+      "Slogan": "REST done right: decaf code, full stack, zero crash.",
+      "Tags": "REST, Stack, Coffee-themed"
+    },
+    {
+      "Slogan": "Your frontend’s best friend when your backend needs to chill.",
+      "Tags": "Frontend, Backend, Chill"
+    },
+    {
+      "Slogan": "Latency is your new relaxation timer.",
+      "Tags": "Latency, Funny, Chill"
+    },
+    {
+      "Slogan": "Grow features, not heart palpitations.",
+      "Tags": "Features, Calm, Humor"
+    },
+    {
+      "Slogan": "Build once, deploy everywhere, sip coffee in between.",
+      "Tags": "Deploy, Coffee-themed, Fun"
+    },
+    {
+      "Slogan": "Let the adapter hustle; you stay mellow.",
+      "Tags": "Adapter, Calm, Developer"
+    },
+    {
+      "Slogan": "Calm code solves more problems than hyperactive code.",
+      "Tags": "Calm, Code, Humor"
+    },
+    {
+      "Slogan": "Endpoints with no drama, just parsing and promises.",
+      "Tags": "Endpoints, Chill, Technical"
+    },
+    {
+      "Slogan": "HTTP‑adapter: the decaf espresso shot for your API stack.",
+      "Tags": "Adapter, Coffee-themed, API"
+    },
+    {
+      "Slogan": "Chill out — your REST endpoints are in good hands.",
+      "Tags": "REST, Chill, Comfort"
+    },
+    {
+      "Slogan": "Handle headers like a barista handles milk foam: effortlessly.",
+      "Tags": "Headers, Humor, Coffee-themed"
+    },
+    {
+      "Slogan": "You’re sipping decaf. Your endpoints are sipping decaf. Everyone’s resting nicely.",
+      "Tags": "Endpoints, Humor, Calm"
+    },
+    { "Slogan": "REST, relax, repeat.", "Tags": "REST, Calm, Repetition" },
+    {
+      "Slogan": "Where API meets iced‑latte vibes.",
+      "Tags": "API, Coffee-themed, Chill"
+    },
+    {
+      "Slogan": "No caffeine crash. Just clean requests.",
+      "Tags": "HTTP, Calm, Developer"
+    },
+    {
+      "Slogan": "Decaf‑TS for HTTP: Because your backend shouldn’t keep you up at night.",
+      "Tags": "Backend, Calm, Coffee-themed"
+    }
+  ]
+}
