@@ -1,9 +1,8 @@
-![Banner](./assets/Banner.png)
+![Banner](./workdocs/assets/decaf-logo.svg)
 
 # decaf-ts/for-http
 
 A lightweight HTTP adapter layer for decaf-ts that enables CRUD-style repositories and services over REST APIs. It defines a generic HttpAdapter with concrete implementations (e.g., Axios), a RestService for simple model-centric operations, and a RestRepository when you need repository decoration logic before submitting to the backend. Includes minimal types for configuration and request flags.
-
 
 ![Licence](https://img.shields.io/github/license/decaf-ts/for-http.svg?style=plastic)
 ![GitHub language count](https://img.shields.io/github/languages/count/decaf-ts/for-http?style=plastic)
@@ -27,6 +26,9 @@ A lightweight HTTP adapter layer for decaf-ts that enables CRUD-style repositori
 ![NPM Version](https://img.shields.io/badge/dynamic/json.svg?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbadges%2Fshields%2Fmaster%2Fpackage.json&label=NPM&query=$.engines.npm&colorB=purple)
 
 Documentation available [here](https://decaf-ts.github.io/for-http/)
+
+Minimal size: 1.7 KB kb gzipped
+
 
 # decaf-ts/for-http — Detailed Description
 
@@ -303,6 +305,24 @@ console.log(AxiosFlavour);
 // AxiosFlags is a type alias of HttpFlags; useful for contexts with Axios
 const f: AxiosFlags = { headers: { "X-Trace": "1" } };
 ```
+
+
+## Coding Principles
+
+- group similar functionality in folders (analog to namespaces but without any namespace declaration)
+- one class per file;
+- one interface per file (unless interface is just used as a type);
+- group types as other interfaces in a types.ts file per folder;
+- group constants or enums in a constants.ts file per folder;
+- group decorators in a decorators.ts file per folder;
+- always import from the specific file, never from a folder or index file (exceptions for dependencies on other packages);
+- prefer the usage of established design patters where applicable:
+  - Singleton (can be an anti-pattern. use with care);
+  - factory;
+  - observer;
+  - strategy;
+  - builder;
+  - etc;
 
 
 ### Related
