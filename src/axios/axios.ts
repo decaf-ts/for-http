@@ -71,7 +71,9 @@ export class AxiosHttpAdapter extends HttpAdapter<
   }
 
   protected override getClient(): Axios {
-    return new Axios();
+    return new Axios({
+      baseURL: `${this.config.protocol}://${this.config.host}`,
+    } as AxiosRequestConfig);
   }
 
   /**
