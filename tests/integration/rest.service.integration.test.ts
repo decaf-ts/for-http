@@ -1,8 +1,9 @@
 import { RestService } from "../../src/RestService";
 import { HttpAdapter } from "../../src/adapter";
 import type { HttpConfig, HttpFlags } from "../../src/types";
-import { Context, InternalError, id } from "@decaf-ts/db-decorators";
-import { Model, ModelArg, prop, model } from "@decaf-ts/decorator-validation";
+import { Context, InternalError, id, BaseError } from "@decaf-ts/db-decorators";
+import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
+import { prop } from "@decaf-ts/decoration";
 
 class TestHttpAdapter extends HttpAdapter<
   HttpConfig,
@@ -46,10 +47,15 @@ class TestHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     return { id, deleted: true } as any;
   }
+
+  parseError(err: Error): BaseError {
+    throw err;
+  }
 }
 
 @model()
 class Dummy extends Model {
+  // @ts-ignore
   @id()
   declare id: string;
 

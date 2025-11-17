@@ -9,7 +9,8 @@ import {
 } from "@decaf-ts/core";
 import { Context, InternalError, OperationKeys } from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
-import { Constructor, Model } from "@decaf-ts/decorator-validation";
+import { Model } from "@decaf-ts/decorator-validation";
+import { Constructor } from "@decaf-ts/decoration";
 import { RestService } from "./RestService";
 import { Statement } from "@decaf-ts/core";
 

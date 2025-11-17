@@ -5,7 +5,8 @@ import {
   required,
   step,
 } from "@decaf-ts/decorator-validation";
-import { pk, uses } from "@decaf-ts/core";
+import { pk } from "@decaf-ts/core";
+import { uses } from "@decaf-ts/decoration";
 
 @uses("axios")
 @model()

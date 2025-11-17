@@ -82,14 +82,15 @@
     "@decaf-ts/utils": "latest",
     "fastify": "^5.6.1"
   },
-  "peerDependencies": {
+  "dependencies": {
     "@decaf-ts/core": "latest",
     "@decaf-ts/db-decorators": "latest",
     "@decaf-ts/decorator-validation": "latest",
+    "@decaf-ts/decoration": "latest",
+    "@decaf-ts/logging": "latest",
     "@decaf-ts/injectable-decorators": "latest",
     "@decaf-ts/reflection": "latest",
     "@decaf-ts/transactional-decorators": "latest",
-    "axios": "^1.7.8",
-    "reflect-metadata": "^0.2.1"
+    "axios": "^1.7.8"
   }
 }
