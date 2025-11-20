@@ -55,7 +55,7 @@ class TestHttpAdapter extends HttpAdapter<
 
 @model()
 class Dummy extends Model {
-  // @ts-ignore
+  // @ts-expect-error because jset
   @id()
   declare id: string;
 
