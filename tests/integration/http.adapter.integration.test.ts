@@ -49,7 +49,6 @@ class TestHttpAdapter extends HttpAdapter<
   }
   // expose protected url for testing
   public buildUrl(tableName: string, query?: Record<string, string | number>) {
-    // @ts-expect-error accessing protected
     return super.url(tableName, query);
   }
 
@@ -95,7 +94,12 @@ describe("HttpAdapter base features", () => {
 
   test("Sequence() should throw UnsupportedError", async () => {
     await expect(
-      adapter.Sequence({ start: 1, step: 1 })
+      adapter.Sequence({
+        startWith: 1,
+        incrementBy: 1,
+        type: "Number",
+        cycle: false,
+      })
     ).rejects.toBeInstanceOf(UnsupportedError);
   });
 

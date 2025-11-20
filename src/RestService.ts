@@ -2,10 +2,10 @@ import {
   BulkCrudOperator,
   Context,
   CrudOperator,
-  findPrimaryKey,
   InternalError,
 } from "@decaf-ts/db-decorators";
-import { Constructor, Model } from "@decaf-ts/decorator-validation";
+import { Model } from "@decaf-ts/decorator-validation";
+import { Constructor } from "@decaf-ts/decoration";
 import { Observable, Observer, Repository } from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
 import { HttpFlags } from "./types";
@@ -102,7 +102,7 @@ export class RestService<
    * @return The primary key property name
    */
   get pk() {
-    if (!this._pk) this._pk = findPrimaryKey(new this.class()).id;
+    if (!this._pk) this._pk = Model.pk(this.class);
     return this._pk;
   }
 

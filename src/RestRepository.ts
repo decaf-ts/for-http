@@ -1,5 +1,6 @@
 import { Repository } from "@decaf-ts/core";
-import { Constructor, Model } from "@decaf-ts/decorator-validation";
+import { Model } from "@decaf-ts/decorator-validation";
+import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
 import { Context } from "@decaf-ts/db-decorators";
 import { HttpFlags } from "./types";

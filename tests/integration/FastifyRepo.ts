@@ -2,14 +2,15 @@ import {
   BaseModel,
   column,
   OrderBySelector,
+  OrderDirection,
   pk,
   query,
-  RamAdapter,
   Repository,
   repository,
   table,
   UnsupportedError,
 } from "@decaf-ts/core";
+import { RamAdapter } from "../../node_modules/@decaf-ts/core/lib/ram/RamAdapter.cjs";
 import {
   maxlength,
   min,
@@ -18,6 +19,7 @@ import {
   ModelArg,
   required,
 } from "@decaf-ts/decorator-validation";
+
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 @table("users")
@@ -72,7 +74,7 @@ export class FastifyRepo extends Repository<TestUserModel, any, any, any, any> {
   }
 
   init() {
-    this.select().orderBy(["name", "asc"]).limit(10).offset(10);
+    this.select().orderBy(["name", OrderDirection.ASC]).limit(10).offset(10);
 
     const data = [
       // "John Smith",
