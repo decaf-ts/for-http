@@ -1,7 +1,18 @@
-import { Repository, Adapter } from "@decaf-ts/core";
+import {
+  ContextOf,
+  EventIds,
+  MaybeContextualArg,
+  Repository,
+  Sequence,
+} from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
+import {
+  BulkCrudOperationKeys,
+  InternalError,
+  OperationKeys,
+} from "@decaf-ts/db-decorators";
 
 /**
  * @description Repository for REST API interactions
@@ -34,18 +45,21 @@ import { HttpAdapter } from "./adapter";
  */
 export class RestRepository<
   M extends Model,
-  A extends HttpAdapter<any, any, any>,
-  Q = A extends HttpAdapter<any, any, infer Q> ? Q : never,
+  A extends HttpAdapter<any, any, any, any>,
+  Q = A extends HttpAdapter<any, any, infer Q, any> ? Q : never,
 > extends Repository<M, A> {
   constructor(adapter: A, clazz?: Constructor<M>) {
     super(adapter, clazz);
   }
 
-  url(path: string, queryParams?: Record<string, string | number>) {
+  url(
+    path: string | Constructor<M>,
+    queryParams?: Record<string, string | number>
+  ) {
     return this.adapter.url(path, queryParams);
   }
 
-  async request<V>(details: Q) {
-    return this.adapter.request<V>(details);
+  async request<R>(details: Q): Promise<R> {
+    return this.adapter.request<R>(details);
   }
 }

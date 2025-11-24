@@ -93,15 +93,13 @@ export abstract class HttpAdapter<
    * @description Returns the repository constructor for this adapter
    * @summary Provides the RestService class as the repository implementation for this HTTP adapter.
    * This method is used to create repository instances that work with this adapter type.
-   * @template M - The model type
-   * @return {Constructor<Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>>} The repository constructor
+   * @template R - Repository subtype working with this adapter
+   * @return {Constructor<R>} The repository constructor
    */
-  override repository<M extends Model>(): Constructor<
-    Repository<M, HttpAdapter<CONF, CON, Q, C>>
-  > {
-    return RestService as unknown as Constructor<
-      Repository<M, HttpAdapter<CONF, CON, Q, C>>
-    >;
+  override repository<
+    R extends Repository<any, Adapter<CONF, CON, Q, C>>,
+  >(): Constructor<R> {
+    return RestService as unknown as Constructor<R>;
   }
 
   /**
@@ -183,6 +181,10 @@ export abstract class HttpAdapter<
     return result;
   }
 
+  protected toTableName<M extends Model>(t: string | Constructor<M>) {
+    return typeof t === "string" ? t : Model.tableName(t);
+  }
+
   /**
    * @description Constructs a URL for API requests
    * @summary Builds a complete URL for API requests using the configured protocol and host,
@@ -191,7 +193,11 @@ export abstract class HttpAdapter<
    * @param {Record<string, string | number>} [queryParams] - Optional query parameters
    * @return {string} The encoded URL string
    */
-  url(tableName: string, queryParams?: Record<string, string | number>) {
+  url<M extends Model>(
+    tableName: string | Constructor<M>,
+    queryParams?: Record<string, string | number>
+  ) {
+    tableName = this.toTableName(tableName);
     const url = new URL(
       `${this.config.protocol}://${this.config.host}/${tableName}`
     );
@@ -225,7 +231,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
    */
   abstract override create<M extends Model>(
-    tableName: Constructor<M>,
+    tableName: Constructor<M> | string,
     id: PrimaryKeyType,
     model: Record<string, any>,
     ...args: ContextualArgs<C>
@@ -241,7 +247,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the retrieved resource
    */
   abstract override read<M extends Model>(
-    tableName: Constructor<M>,
+    tableName: Constructor<M> | string,
     id: PrimaryKeyType,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
@@ -257,7 +263,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
    */
   abstract override update<M extends Model>(
-    tableName: Constructor<M>,
+    tableName: Constructor<M> | string,
     id: string | number,
     model: Record<string, any>,
     ...args: ContextualArgs<C>
@@ -273,7 +279,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the deletion result
    */
   abstract override delete<M extends Model>(
-    tableName: Constructor<M>,
+    tableName: Constructor<M> | string,
     id: PrimaryKeyType,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;

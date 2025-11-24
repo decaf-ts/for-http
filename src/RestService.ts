@@ -1,13 +1,16 @@
 import {
   BulkCrudOperator,
+  Context,
   CrudOperator,
   InternalError,
+  OperationKeys,
   PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
-import { Model } from "@decaf-ts/decorator-validation";
+import { model, Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import {
   ContextOf,
+  ContextualArgs,
   ContextualLoggedClass,
   MaybeContextualArg,
   Observable,
@@ -15,6 +18,7 @@ import {
 } from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
 import { Logger } from "@decaf-ts/logging";
+import { RestRepository } from "./RestRepository";
 
 /**
  * @description Service class for REST API operations
@@ -65,58 +69,10 @@ import { Logger } from "@decaf-ts/logging";
  *   Service-->>Client: revert(record)
  */
 export class RestService<
-    M extends Model,
-    A extends HttpAdapter<any, any, any>,
-    Q = A extends HttpAdapter<any, any, infer Q> ? Q : never,
-  >
-  extends ContextualLoggedClass<ContextOf<A>>
-  implements CrudOperator<M>, BulkCrudOperator<M>, Observable
-{
-  private readonly _class!: Constructor<M>;
-  private _pk!: keyof M;
-
-  private logger?: Logger;
-
-  /**
-   * @description Gets the model class constructor
-   * @summary Retrieves the model class constructor associated with this service.
-   * Throws an error if no class definition is found.
-   * @return {Constructor<M>} The model class constructor
-   * @throws {InternalError} If no class definition is found
-   */
-  get class() {
-    if (!this._class)
-      throw new InternalError("No class definition found for this repository");
-    return this._class;
-  }
-
-  protected override get log(): Logger {
-    if (!this.logger)
-      this.logger = (
-        this.adapter["log" as keyof typeof this.adapter] as Logger
-      ).for(this.toString());
-    return this.logger;
-  }
-
-  protected observers: Observer[] = [];
-
-  private readonly _adapter!: A;
-
-  /**
-   * @description Gets the HTTP adapter
-   * @summary Retrieves the HTTP adapter associated with this service.
-   * Throws an error if no adapter is found.
-   * @return {A} The HTTP adapter instance
-   * @throws {InternalError} If no adapter is found
-   */
-  protected get adapter(): A {
-    if (!this._adapter)
-      throw new InternalError(
-        "No adapter found for this repository. did you use the @uses decorator or pass it in the constructor?"
-      );
-    return this._adapter;
-  }
-
+  M extends Model,
+  A extends HttpAdapter<any, any, any, any>,
+  Q = A extends HttpAdapter<any, any, infer Q, any> ? Q : never,
+> extends RestRepository<M, A, Q> {
   /**
    * @description Initializes a new RestService instance
    * @summary Creates a new service instance with the specified adapter and optional model class.
@@ -125,241 +81,85 @@ export class RestService<
    * @param {Constructor<M>} [clazz] - Optional constructor for the model class
    */
   constructor(adapter: A, clazz?: Constructor<M>) {
-    super();
-    this._adapter = adapter;
-    if (clazz) this._class = clazz;
+    super(adapter, clazz);
   }
 
-  url(path: string, queryParams?: Record<string, string | number>) {
-    return this.adapter.url(path, queryParams);
-  }
-
-  /**
-   * @description Creates a new resource
-   * @summary Creates a new resource in the REST API using the provided model.
-   * The method prepares the model for the adapter, sends the create request,
-   * and then converts the response back to a model instance.
-   * @param {M} model - The model instance to create
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M>} A promise that resolves with the created model instance
-   */
-  async create(
+  protected override async createPrefix(
     model: M,
     ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M> {
-    const { ctx, ctxArgs } = this.logCtx(args, this.create);
-    // eslint-disable-next-line prefer-const
-    let { record, id } = this.adapter.prepare(model, this.class, ctx);
-    record = await this.adapter.create(this.class, id, record, ...ctxArgs);
-    return this.adapter.revert(record, this.class, id, undefined, ctx);
+  ): Promise<[M, ...any[], ContextOf<A>]> {
+    return super.createPrefix(model, ...args);
   }
 
-  /**
-   * @description Retrieves a resource by ID
-   * @summary Fetches a resource from the REST API using the provided ID.
-   * The method sends the read request and converts the response to a model instance.
-   * @param {string|number} id - The identifier of the resource to retrieve
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M>} A promise that resolves with the retrieved model instance
-   */
-  async read(
-    id: PrimaryKeyType,
+  protected override async createAllPrefix(
+    models: M[],
     ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M> {
-    const { ctxArgs, ctx } = this.logCtx(args, this.read);
-    const m = await this.adapter.read(this.class, id, ...ctxArgs);
-    return this.adapter.revert(m, this.class, id, undefined, ctx);
+  ): Promise<[M[], ...any[], ContextOf<A>]> {
+    return super.createAllPrefix(models, ...args);
   }
 
-  /**
-   * @description Updates an existing resource
-   * @summary Updates an existing resource in the REST API using the provided model.
-   * The method prepares the model for the adapter, sends the update request,
-   * and then converts the response back to a model instance.
-   * @param {M} model - The model instance with updated data
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M>} A promise that resolves with the updated model instance
-   */
-  async update(
+  protected override async readPrefix(
+    key: PrimaryKeyType,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<[PrimaryKeyType, ...any[], ContextOf<A>]> {
+    return super.readPrefix(key, ...args);
+  }
+
+  protected override async readAllPrefix(
+    keys: PrimaryKeyType[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<[PrimaryKeyType[], ...any[], ContextOf<A>]> {
+    return super.readAllPrefix(keys, ...args);
+  }
+
+  protected override async updatePrefix(
     model: M,
     ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M> {
-    const { ctx, ctxArgs } = this.logCtx(args, this.update);
-    // eslint-disable-next-line prefer-const
-    let { record, id } = this.adapter.prepare(model, ctx);
-    record = await this.adapter.update(this.class, id, record, ...ctxArgs);
-    return this.adapter.revert(record, this.class, id, ctx);
+  ): Promise<[M, ...any[], ContextOf<A>]> {
+    return super.updatePrefix(model, ...args);
   }
 
-  /**
-   * @description Deletes a resource by ID
-   * @summary Removes a resource from the REST API using the provided ID.
-   * The method sends the delete request and converts the response to a model instance.
-   * @param {string|number} id - The identifier of the resource to delete
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M>} A promise that resolves with the deleted model instance
-   */
-  async delete(
-    id: PrimaryKeyType,
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M> {
-    const { ctxArgs, ctx } = this.logCtx(args, this.delete);
-    const m = await this.adapter.delete(this.class, id, ...ctxArgs);
-    return this.adapter.revert(m, this.class, id, ctx);
-  }
-
-  async request<R>(details: Q): Promise<R> {
-    return this.adapter.request<R>(details);
-  }
-
-  /**
-   * @description Creates multiple resources
-   * @summary Creates multiple resources in the REST API using the provided models.
-   * The method prepares each model for the adapter, sends a bulk create request,
-   * and then converts the responses back to model instances.
-   * @param {M[]} models - The model instances to create
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M[]>} A promise that resolves with an array of created model instances
-   * @mermaid
-   * sequenceDiagram
-   *   participant Client
-   *   participant Service as RestService
-   *   participant Adapter as HttpAdapter
-   *   Client->>Service: createAll(models)
-   *   Service->>Adapter: prepare(model, pk) x N
-   *   Service->>Adapter: createAll(table, ids[], records[])
-   *   Adapter-->>Service: records[]
-   *   Service-->>Client: revert(records[])
-   */
-  async createAll(
+  protected override async updateAllPrefix(
     models: M[],
     ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M[]> {
-    if (!models.length) return models;
-    const { ctx, ctxArgs } = this.logCtx(args, this.createAll);
-    const prepared = models.map((m) => this.adapter.prepare(m, ctx));
-    const ids = prepared.map((p) => p.id);
-    let records = prepared.map((p) => p.record);
-    records = await this.adapter.createAll(
-      this.class,
-      ids as PrimaryKeyType[],
-      records,
-      ...ctxArgs
-    );
-    return records.map((r, i) =>
-      this.adapter.revert(r, this.class, ids[i], ctx)
-    );
+  ): Promise<[M[], ...any[], ContextOf<A>]> {
+    return super.updateAllPrefix(models, ...args);
   }
 
-  /**
-   * @description Deletes multiple resources by IDs
-   * @summary Removes multiple resources from the REST API using the provided IDs.
-   * The method sends a bulk delete request and converts the responses to model instances.
-   * @param {string[]|number[]} keys - The identifiers of the resources to delete
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M[]>} A promise that resolves with an array of deleted model instances
-   */
-  async deleteAll(
+  protected override async deletePrefix(
+    key: PrimaryKeyType,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<[PrimaryKeyType, ...any[], ContextOf<A>]> {
+    const contextArgs = await Context.args<M, ContextOf<A>>(
+      OperationKeys.DELETE,
+      this.class,
+      args,
+      this.adapter,
+      this._overrides || {}
+    );
+    const model = await this.read(key, ...contextArgs.args);
+    await enforceDBDecorators<M, Repository<M, A>, any>(
+      this,
+      contextArgs.context,
+      model,
+      OperationKeys.DELETE,
+      OperationKeys.ON
+    );
+    return [key, ...contextArgs.args];
+  }
+
+  protected override async deleteAllPrefix(
     keys: PrimaryKeyType[],
     ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M[]> {
-    const { ctx, ctxArgs } = this.logCtx(args, this.deleteAll);
-    const results = await this.adapter.deleteAll(this.class, keys, ...ctxArgs);
-    return results.map((r, i) =>
-      this.adapter.revert(r, this.class, keys[i], ctx)
-    );
-  }
-
-  /**
-   * @description Retrieves multiple resources by IDs
-   * @summary Fetches multiple resources from the REST API using the provided IDs.
-   * The method sends a bulk read request and converts the responses to model instances.
-   * @param {string[]|number[]} keys - The identifiers of the resources to retrieve
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M[]>} A promise that resolves with an array of retrieved model instances
-   */
-  async readAll(
-    keys: PrimaryKeyType[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M[]> {
-    const { ctx, ctxArgs } = this.logCtx(args, this.readAll);
-    const records = await this.adapter.readAll(this.class, keys, ...ctxArgs);
-    return records.map((r, i) =>
-      this.adapter.revert(r, this.class, keys[i], ctx)
-    );
-  }
-
-  /**
-   * @description Updates multiple resources
-   * @summary Updates multiple resources in the REST API using the provided models.
-   * The method prepares each model for the adapter, sends a bulk update request,
-   * and then converts the responses back to model instances.
-   * @param {M[]} models - The model instances with updated data
-   * @param {...any[]} args - Additional arguments to pass to the adapter
-   * @return {Promise<M[]>} A promise that resolves with an array of updated model instances
-   */
-  async updateAll(
-    models: M[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<M[]> {
-    const { ctx, ctxArgs } = this.logCtx(args, this.updateAll);
-    const records = models.map((m) => this.adapter.prepare(m, ctx));
-    const updated = await this.adapter.updateAll(
+  ): Promise<[PrimaryKeyType[], ...any[], ContextOf<A>]> {
+    const contextArgs = await Context.args<M, ContextOf<A>>(
+      OperationKeys.DELETE,
       this.class,
-      records.map((r) => r.id),
-      records.map((r) => r.record),
-      ...ctxArgs
+      args,
+      this.adapter,
+      this._overrides || {}
     );
-    return updated.map((u, i) =>
-      this.adapter.revert(u, this.class, records[i].id, ctx)
-    );
-  }
-
-  /**
-   * @description Registers an observer
-   * @summary Adds an observer to the list of observers that will be notified of changes.
-   * Throws an error if the observer is already registered.
-   * @param {Observer} observer - The observer to register
-   * @return {void}
-   * @throws {InternalError} If the observer is already registered
-   */
-  observe(observer: Observer): void {
-    const index = this.observers.indexOf(observer);
-    if (index !== -1) throw new InternalError("Observer already registered");
-    this.observers.push(observer);
-  }
-
-  /**
-   * @description Unregisters an observer
-   * @summary Removes an observer from the list of observers.
-   * Throws an error if the observer is not found.
-   * @param {Observer} observer - The observer to unregister
-   * @return {void}
-   * @throws {InternalError} If the observer is not found
-   */
-  unObserve(observer: Observer): void {
-    const index = this.observers.indexOf(observer);
-    if (index === -1) throw new InternalError("Failed to find Observer");
-    this.observers.splice(index, 1);
-  }
-
-  /**
-   * @description Notifies all registered observers
-   * @summary Calls the refresh method on all registered observers to update themselves.
-   * Any errors during observer refresh are logged as warnings but don't stop the process.
-   * @param {...any[]} [args] - Optional arguments to pass to the observer refresh method
-   * @return {Promise<void>} A promise that resolves when all observers have been updated
-   */
-  async updateObservers(...args: any[]): Promise<void> {
-    const results = await Promise.allSettled(
-      this.observers.map((o) => o.refresh(...args))
-    );
-    results.forEach((result, i) => {
-      if (result.status === "rejected")
-        console.warn(
-          `Failed to update observable ${this.observers[i]}: ${result.reason}`
-        );
-    });
+    return [keys, ...contextArgs.args];
   }
 
   override toString(): string {

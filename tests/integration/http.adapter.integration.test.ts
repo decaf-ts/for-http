@@ -1,17 +1,16 @@
 import { HttpAdapter } from "../../src/adapter";
 import { RestService } from "../../src/RestService";
-import { UnsupportedError } from "@decaf-ts/core";
-import { BaseError, Context, InternalError } from "@decaf-ts/db-decorators";
-import type { HttpConfig, HttpFlags } from "../../src/types";
+import { ContextualArgs, UnsupportedError } from "@decaf-ts/core";
+import {
+  BaseError,
+  Context,
+  InternalError,
+  PrimaryKeyType,
+} from "@decaf-ts/db-decorators";
+import type { HttpConfig } from "../../src/types";
 import { Model } from "@decaf-ts/decorator-validation";
 
-class TestHttpAdapter extends HttpAdapter<
-  HttpConfig,
-  any,
-  any,
-  HttpFlags,
-  Context<HttpFlags>
-> {
+class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
   constructor(config: HttpConfig, alias?: string) {
     super(config, "test-http", alias);
   }
@@ -23,27 +22,35 @@ class TestHttpAdapter extends HttpAdapter<
   }
   async create(
     tableName: string,
-    id: string | number,
-    model: Record<string, any>
+    id: PrimaryKeyType,
+    model: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { tableName, id, ...model };
   }
   async read(
     tableName: string,
-    id: string | number | bigint
+    id: PrimaryKeyType,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { tableName, id } as any;
   }
   async update(
     tableName: string,
-    id: string | number,
-    model: Record<string, any>
+    id: PrimaryKeyType,
+    model: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { tableName, id, ...model };
   }
   async delete(
     tableName: string,
-    id: string | number | bigint
+    id: PrimaryKeyType,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { tableName, id } as any;
   }
@@ -52,8 +59,8 @@ class TestHttpAdapter extends HttpAdapter<
     return super.url(tableName, query);
   }
 
-  override parseError(err: Error): BaseError {
-    return new InternalError(err.message);
+  override parseError<E extends BaseError>(err: Error): E {
+    return new InternalError(err.message) as E;
   }
 }
 
@@ -66,7 +73,7 @@ describe("HttpAdapter base features", () => {
   });
 
   test("repository() should return RestService constructor", () => {
-    const RepoCtor = adapter.repository<Model>();
+    const RepoCtor = adapter.repository();
     expect(RepoCtor).toBe(RestService as any);
   });
 
@@ -87,7 +94,8 @@ describe("HttpAdapter base features", () => {
   });
 
   test("raw() should throw UnsupportedError", async () => {
-    await expect(adapter.raw<any>({} as any, true)).rejects.toBeInstanceOf(
+    const ctx = new Context();
+    await expect(adapter.raw<any>({} as any, ctx)).rejects.toBeInstanceOf(
       UnsupportedError
     );
   });

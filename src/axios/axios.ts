@@ -8,9 +8,16 @@ import {
   Context,
   InternalError,
   NotFoundError,
+  PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
+import {
+  ContextualArgs,
+  AuthorizationError,
+  UnsupportedError,
+} from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
-import { AuthorizationError, UnsupportedError } from "@decaf-ts/core";
+import { Model } from "@decaf-ts/decorator-validation";
+import { Constructor } from "@decaf-ts/decoration";
 
 /**
  * @description Axios implementation of the HTTP adapter
@@ -63,7 +70,6 @@ export class AxiosHttpAdapter extends HttpAdapter<
   HttpConfig,
   Axios,
   AxiosRequestConfig,
-  AxiosFlags,
   Context<AxiosFlags>
 > {
   constructor(config: HttpConfig, alias?: string) {
@@ -97,10 +103,11 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @param {Record<string, any>} model - The data model to create
    * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
    */
-  async create(
-    tableName: string,
-    id: string | number,
-    model: Record<string, any>
+  override async create<M extends Model>(
+    tableName: Constructor<M> | string,
+    id: PrimaryKeyType,
+    model: Record<string, any>,
+    ..._args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName);
@@ -117,12 +124,15 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @param {string|number|bigint} id - The identifier for the resource to retrieve
    * @return {Promise<Record<string, any>>} A promise that resolves with the retrieved resource
    */
-  async read(
-    tableName: string,
-    id: string | number | bigint
+  override async read<M extends Model>(
+    tableName: Constructor<M> | string,
+    id: PrimaryKeyType,
+    ..._args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     try {
-      const url = this.url(tableName, { id: id as string | number });
+      const url = this.url(tableName, {
+        id: id as string | number,
+      });
       return this.client.get(url);
     } catch (e: any) {
       throw this.parseError(e);
@@ -138,10 +148,12 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @param {Record<string, any>} model - The updated data model
    * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
    */
-  async update(
-    tableName: string,
+  override async update<M extends Model>(
+    tableName: Constructor<M> | string,
     id: string | number,
-    model: Record<string, any>
+    model: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName);
@@ -159,19 +171,24 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @param {string|number|bigint} id - The identifier for the resource to delete
    * @return {Promise<Record<string, any>>} A promise that resolves with the deletion result
    */
-  async delete(
-    tableName: string,
-    id: string | number | bigint
+  override async delete<M extends Model>(
+    tableName: Constructor<M> | string,
+    id: PrimaryKeyType,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ..._args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     try {
-      const url = this.url(tableName, { id: id as string | number });
+      const url = this.url(tableName, {
+        id: id as string | number,
+      });
       return this.client.delete(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
   }
 
-  override parseError(err: Error): BaseError {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  override parseError<E extends BaseError>(err: Error, ...args: any[]): E {
     const errs = [
       InternalError,
       AuthorizationError,
@@ -181,8 +198,8 @@ export class AxiosHttpAdapter extends HttpAdapter<
     ];
     for (const error of errs) {
       if ((err as Error).message.includes(error.name))
-        return new error(err.message);
+        return new error(err.message) as E;
     }
-    return new InternalError(err.message);
+    return new InternalError(err.message) as E;
   }
 }

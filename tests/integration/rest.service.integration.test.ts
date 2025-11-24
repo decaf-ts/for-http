@@ -1,17 +1,12 @@
 import { RestService } from "../../src/RestService";
 import { HttpAdapter } from "../../src/adapter";
-import type { HttpConfig, HttpFlags } from "../../src/types";
-import { Context, InternalError, id, BaseError } from "@decaf-ts/db-decorators";
+import type { HttpConfig } from "../../src/types";
+import { InternalError, BaseError, Context } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { prop } from "@decaf-ts/decoration";
+import { ContextualArgs } from "../../../core/src/index";
 
-class TestHttpAdapter extends HttpAdapter<
-  HttpConfig,
-  any,
-  any,
-  HttpFlags,
-  Context<HttpFlags>
-> {
+class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
   constructor(config: HttpConfig, alias?: string) {
     super(config, "test-http", alias);
   }
@@ -24,31 +19,39 @@ class TestHttpAdapter extends HttpAdapter<
   async create(
     tableName: string,
     id: string | number,
-    model: Record<string, any>
+    model: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { ...model, created: true };
   }
   async read(
     tableName: string,
-    id: string | number | bigint
+    id: string | number | bigint,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { id, tableName } as any;
   }
   async update(
     tableName: string,
     id: string | number,
-    model: Record<string, any>
+    model: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { ...model, updated: true };
   }
   async delete(
     tableName: string,
-    id: string | number | bigint
+    id: string | number | bigint,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
     return { id, deleted: true } as any;
   }
 
-  parseError(err: Error): BaseError {
+  parseError<E extends BaseError>(err: Error): E {
     throw err;
   }
 }
@@ -57,7 +60,7 @@ class TestHttpAdapter extends HttpAdapter<
 class Dummy extends Model {
   // @ts-expect-error because jset
   @id()
-  declare id: string;
+  id!: string;
 
   @prop()
   name?: string;

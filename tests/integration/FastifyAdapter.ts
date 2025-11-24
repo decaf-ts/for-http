@@ -22,7 +22,7 @@ function parseValue(value: string): any {
   return value;
 }
 
-export function buildServer(repo: Repository<any, any, any>): FastifyInstance {
+export function buildServer(repo: Repository<any, any>): FastifyInstance {
   const app = Fastify({ logger: false });
 
   app.get("/query/:methodName", async (request, reply) => {

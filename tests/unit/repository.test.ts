@@ -4,7 +4,6 @@ import { Axios } from "axios";
 import { createdAt, pk, Repository, updatedAt } from "@decaf-ts/core";
 import {
   model,
-  Model,
   ModelArg,
   required,
   step,
@@ -12,6 +11,7 @@ import {
 import { RestRepository } from "../../src";
 
 import { TimestampValidator } from "@decaf-ts/db-decorators";
+import { Model } from "@decaf-ts/decorator-validation";
 console.log(TimestampValidator);
 const cfg: HttpConfig = {
   protocol: "http",
@@ -91,7 +91,7 @@ describe("RestRepository", function () {
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}`,
+      `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}`,
       created
     );
     expect(created).toBeInstanceOf(OtherTestModel);
@@ -109,7 +109,7 @@ describe("RestRepository", function () {
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
       encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}?id=${model.id}`
+        `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}?id=${model.id}`
       )
     );
     expect(read).toBeInstanceOf(OtherTestModel);
@@ -135,7 +135,7 @@ describe("RestRepository", function () {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}`,
+      `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}`,
       updated
     );
 
@@ -158,7 +158,7 @@ describe("RestRepository", function () {
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
       encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Repository.table(OtherTestModel)}?id=${model.id}`
+        `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}?id=${model.id}`
       )
     );
   });

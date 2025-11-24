@@ -68,7 +68,7 @@ export class TestUserModel extends BaseModel {
 }
 
 @repository(TestUserModel)
-export class FastifyRepo extends Repository<TestUserModel, any, any, any, any> {
+export class FastifyRepo extends Repository<TestUserModel, any> {
   constructor() {
     super(new RamAdapter(), TestUserModel);
   }
