@@ -32,7 +32,9 @@ describe("Rest Service", () => {
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.client as Axios, "get");
+    getMock = jest
+      .spyOn(adapter.client as Axios, "get")
+      .mockResolvedValue(Object.assign({}, model));
     postMock = jest.spyOn(adapter.client as Axios, "post");
     putMock = jest.spyOn(adapter.client as Axios, "put");
     deleteMock = jest.spyOn(adapter.client as Axios, "delete");
@@ -68,10 +70,6 @@ describe("Rest Service", () => {
   });
 
   it("reads", async function () {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getMock.mockImplementation(async (url: string) => {
-      return Object.assign({}, model);
-    });
     const read = await repo.read(model.id);
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);

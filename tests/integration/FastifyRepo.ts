@@ -6,7 +6,6 @@ import {
   pk,
   query,
   Repository,
-  repository,
   table,
   UnsupportedError,
 } from "@decaf-ts/core";
@@ -67,7 +66,6 @@ export class TestUserModel extends BaseModel {
   }
 }
 
-@repository(TestUserModel)
 export class FastifyRepo extends Repository<TestUserModel, any> {
   constructor() {
     super(new RamAdapter(), TestUserModel);
@@ -100,7 +98,7 @@ export class FastifyRepo extends Repository<TestUserModel, any> {
         active: idx % 3 === 0,
       });
     });
-    return Repository.forModel(TestUserModel).createAll(data);
+    return this.createAll(data);
   }
 
   @query()

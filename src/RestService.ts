@@ -1,23 +1,7 @@
-import {
-  BulkCrudOperator,
-  Context,
-  CrudOperator,
-  InternalError,
-  OperationKeys,
-  PrimaryKeyType,
-} from "@decaf-ts/db-decorators";
-import { model, Model } from "@decaf-ts/decorator-validation";
+import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
-import {
-  ContextOf,
-  ContextualArgs,
-  ContextualLoggedClass,
-  MaybeContextualArg,
-  Observable,
-  Observer,
-} from "@decaf-ts/core";
+import { FlagsOf } from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
-import { Logger } from "@decaf-ts/logging";
 import { RestRepository } from "./RestRepository";
 
 /**
@@ -73,6 +57,11 @@ export class RestService<
   A extends HttpAdapter<any, any, any, any>,
   Q = A extends HttpAdapter<any, any, infer Q, any> ? Q : never,
 > extends RestRepository<M, A, Q> {
+  protected override _overrides: Partial<FlagsOf<A>> = {
+    ignoreValidation: true,
+    ignoreHandlers: true,
+  } as Partial<FlagsOf<A>>;
+
   /**
    * @description Initializes a new RestService instance
    * @summary Creates a new service instance with the specified adapter and optional model class.
@@ -84,85 +73,7 @@ export class RestService<
     super(adapter, clazz);
   }
 
-  protected override async createPrefix(
-    model: M,
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[M, ...any[], ContextOf<A>]> {
-    return super.createPrefix(model, ...args);
-  }
-
-  protected override async createAllPrefix(
-    models: M[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[M[], ...any[], ContextOf<A>]> {
-    return super.createAllPrefix(models, ...args);
-  }
-
-  protected override async readPrefix(
-    key: PrimaryKeyType,
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[PrimaryKeyType, ...any[], ContextOf<A>]> {
-    return super.readPrefix(key, ...args);
-  }
-
-  protected override async readAllPrefix(
-    keys: PrimaryKeyType[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[PrimaryKeyType[], ...any[], ContextOf<A>]> {
-    return super.readAllPrefix(keys, ...args);
-  }
-
-  protected override async updatePrefix(
-    model: M,
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[M, ...any[], ContextOf<A>]> {
-    return super.updatePrefix(model, ...args);
-  }
-
-  protected override async updateAllPrefix(
-    models: M[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[M[], ...any[], ContextOf<A>]> {
-    return super.updateAllPrefix(models, ...args);
-  }
-
-  protected override async deletePrefix(
-    key: PrimaryKeyType,
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[PrimaryKeyType, ...any[], ContextOf<A>]> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      OperationKeys.DELETE,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const model = await this.read(key, ...contextArgs.args);
-    await enforceDBDecorators<M, Repository<M, A>, any>(
-      this,
-      contextArgs.context,
-      model,
-      OperationKeys.DELETE,
-      OperationKeys.ON
-    );
-    return [key, ...contextArgs.args];
-  }
-
-  protected override async deleteAllPrefix(
-    keys: PrimaryKeyType[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[PrimaryKeyType[], ...any[], ContextOf<A>]> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      OperationKeys.DELETE,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    return [keys, ...contextArgs.args];
-  }
-
   override toString(): string {
-    return `${this.class.name} rest service`;
+    return `${Model.tableName(this.class)} REST service`;
   }
 }
