@@ -1,15 +1,20 @@
 import {
   BulkCrudOperator,
-  Context,
   CrudOperator,
   InternalError,
+  PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
-import { Observable, Observer, Repository } from "@decaf-ts/core";
+import {
+  ContextOf,
+  ContextualLoggedClass,
+  MaybeContextualArg,
+  Observable,
+  Observer,
+} from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
-import { HttpFlags } from "./types";
-import { LoggedClass, Logger } from "@decaf-ts/logging";
+import { Logger } from "@decaf-ts/logging";
 
 /**
  * @description Service class for REST API operations
@@ -61,12 +66,10 @@ import { LoggedClass, Logger } from "@decaf-ts/logging";
  */
 export class RestService<
     M extends Model,
-    Q,
-    A extends HttpAdapter<any, any, Q, F, C>,
-    F extends HttpFlags = HttpFlags,
-    C extends Context<F> = Context<F>,
+    A extends HttpAdapter<any, any, any>,
+    Q = A extends HttpAdapter<any, any, infer Q> ? Q : never,
   >
-  extends LoggedClass
+  extends ContextualLoggedClass<ContextOf<A>>
   implements CrudOperator<M>, BulkCrudOperator<M>, Observable
 {
   private readonly _class!: Constructor<M>;
@@ -95,21 +98,9 @@ export class RestService<
     return this.logger;
   }
 
-  /**
-   * @description Gets the primary key property name
-   * @summary Retrieves the name of the primary key property for the model.
-   * If not already determined, it finds the primary key using the model class.
-   * @return The primary key property name
-   */
-  get pk() {
-    if (!this._pk) this._pk = Model.pk(this.class);
-    return this._pk;
-  }
-
   protected observers: Observer[] = [];
 
   private readonly _adapter!: A;
-  private _tableName!: string;
 
   /**
    * @description Gets the HTTP adapter
@@ -124,17 +115,6 @@ export class RestService<
         "No adapter found for this repository. did you use the @uses decorator or pass it in the constructor?"
       );
     return this._adapter;
-  }
-
-  /**
-   * @description Gets the table name for the model
-   * @summary Retrieves the table name associated with the model class.
-   * If not already determined, it gets the table name from the Repository utility.
-   * @return {string} The table name
-   */
-  protected get tableName() {
-    if (!this._tableName) this._tableName = Repository.table(this.class);
-    return this._tableName;
   }
 
   /**
@@ -163,11 +143,15 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M>} A promise that resolves with the created model instance
    */
-  async create(model: M, ...args: any[]): Promise<M> {
+  async create(
+    model: M,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    const { ctx, ctxArgs } = this.logCtx(args, this.create);
     // eslint-disable-next-line prefer-const
-    let { record, id } = this.adapter.prepare(model, this.pk);
-    record = await this.adapter.create(this.tableName, id, record, ...args);
-    return this.adapter.revert(record, this.class, this.pk, id);
+    let { record, id } = this.adapter.prepare(model, this.class, ctx);
+    record = await this.adapter.create(this.class, id, record, ...ctxArgs);
+    return this.adapter.revert(record, this.class, id, undefined, ctx);
   }
 
   /**
@@ -178,9 +162,13 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M>} A promise that resolves with the retrieved model instance
    */
-  async read(id: string | number, ...args: any[]): Promise<M> {
-    const m = await this.adapter.read(this.tableName, id, ...args);
-    return this.adapter.revert(m, this.class, this.pk, id);
+  async read(
+    id: PrimaryKeyType,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    const { ctxArgs, ctx } = this.logCtx(args, this.read);
+    const m = await this.adapter.read(this.class, id, ...ctxArgs);
+    return this.adapter.revert(m, this.class, id, undefined, ctx);
   }
 
   /**
@@ -192,11 +180,15 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M>} A promise that resolves with the updated model instance
    */
-  async update(model: M, ...args: any[]): Promise<M> {
+  async update(
+    model: M,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    const { ctx, ctxArgs } = this.logCtx(args, this.update);
     // eslint-disable-next-line prefer-const
-    let { record, id } = this.adapter.prepare(model, this.pk);
-    record = await this.adapter.update(this.tableName, id, record, ...args);
-    return this.adapter.revert(record, this.class, this.pk, id);
+    let { record, id } = this.adapter.prepare(model, ctx);
+    record = await this.adapter.update(this.class, id, record, ...ctxArgs);
+    return this.adapter.revert(record, this.class, id, ctx);
   }
 
   /**
@@ -207,13 +199,17 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M>} A promise that resolves with the deleted model instance
    */
-  async delete(id: string | number, ...args: any[]): Promise<M> {
-    const m = await this.adapter.delete(this.tableName, id, ...args);
-    return this.adapter.revert(m, this.class, this.pk, id);
+  async delete(
+    id: PrimaryKeyType,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    const { ctxArgs, ctx } = this.logCtx(args, this.delete);
+    const m = await this.adapter.delete(this.class, id, ...ctxArgs);
+    return this.adapter.revert(m, this.class, id, ctx);
   }
 
-  async request<V>(details: Q) {
-    return this.adapter.request<V>(details);
+  async request<R>(details: Q): Promise<R> {
+    return this.adapter.request<R>(details);
   }
 
   /**
@@ -235,19 +231,23 @@ export class RestService<
    *   Adapter-->>Service: records[]
    *   Service-->>Client: revert(records[])
    */
-  async createAll(models: M[], ...args: any[]): Promise<M[]> {
+  async createAll(
+    models: M[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
     if (!models.length) return models;
-    const prepared = models.map((m) => this.adapter.prepare(m, this.pk));
+    const { ctx, ctxArgs } = this.logCtx(args, this.createAll);
+    const prepared = models.map((m) => this.adapter.prepare(m, ctx));
     const ids = prepared.map((p) => p.id);
     let records = prepared.map((p) => p.record);
     records = await this.adapter.createAll(
-      this.tableName,
-      ids as (string | number)[],
+      this.class,
+      ids as PrimaryKeyType[],
       records,
-      ...args
+      ...ctxArgs
     );
     return records.map((r, i) =>
-      this.adapter.revert(r, this.class, this.pk, ids[i] as string | number)
+      this.adapter.revert(r, this.class, ids[i], ctx)
     );
   }
 
@@ -259,10 +259,14 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M[]>} A promise that resolves with an array of deleted model instances
    */
-  async deleteAll(keys: string[] | number[], ...args: any[]): Promise<M[]> {
-    const results = await this.adapter.deleteAll(this.tableName, keys, ...args);
+  async deleteAll(
+    keys: PrimaryKeyType[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    const { ctx, ctxArgs } = this.logCtx(args, this.deleteAll);
+    const results = await this.adapter.deleteAll(this.class, keys, ...ctxArgs);
     return results.map((r, i) =>
-      this.adapter.revert(r, this.class, this.pk, keys[i])
+      this.adapter.revert(r, this.class, keys[i], ctx)
     );
   }
 
@@ -274,10 +278,14 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M[]>} A promise that resolves with an array of retrieved model instances
    */
-  async readAll(keys: string[] | number[], ...args: any[]): Promise<M[]> {
-    const records = await this.adapter.readAll(this.tableName, keys, ...args);
+  async readAll(
+    keys: PrimaryKeyType[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    const { ctx, ctxArgs } = this.logCtx(args, this.readAll);
+    const records = await this.adapter.readAll(this.class, keys, ...ctxArgs);
     return records.map((r, i) =>
-      this.adapter.revert(r, this.class, this.pk, keys[i])
+      this.adapter.revert(r, this.class, keys[i], ctx)
     );
   }
 
@@ -290,16 +298,20 @@ export class RestService<
    * @param {...any[]} args - Additional arguments to pass to the adapter
    * @return {Promise<M[]>} A promise that resolves with an array of updated model instances
    */
-  async updateAll(models: M[], ...args: any[]): Promise<M[]> {
-    const records = models.map((m) => this.adapter.prepare(m, this.pk));
+  async updateAll(
+    models: M[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    const { ctx, ctxArgs } = this.logCtx(args, this.updateAll);
+    const records = models.map((m) => this.adapter.prepare(m, ctx));
     const updated = await this.adapter.updateAll(
-      this.tableName,
+      this.class,
       records.map((r) => r.id),
       records.map((r) => r.record),
-      ...args
+      ...ctxArgs
     );
     return updated.map((u, i) =>
-      this.adapter.revert(u, this.class, this.pk, records[i].id)
+      this.adapter.revert(u, this.class, records[i].id, ctx)
     );
   }
 

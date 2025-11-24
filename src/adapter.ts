@@ -1,13 +1,21 @@
 import {
   Adapter,
   Condition,
+  ContextualArgs,
   PersistenceKeys,
+  PreparedModel,
   Repository,
   Sequence,
   SequenceOptions,
   UnsupportedError,
 } from "@decaf-ts/core";
-import { Context, InternalError, OperationKeys } from "@decaf-ts/db-decorators";
+import {
+  Context,
+  FlagsOf,
+  InternalError,
+  OperationKeys,
+  PrimaryKeyType,
+} from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
@@ -47,13 +55,12 @@ import { Statement } from "@decaf-ts/core";
  * ```
  */
 export abstract class HttpAdapter<
-  Y extends HttpConfig,
+  CONF extends HttpConfig,
   CON,
   Q,
-  F extends HttpFlags = HttpFlags,
-  C extends Context<F> = Context<F>,
-> extends Adapter<Y, CON, Q, F, C> {
-  protected constructor(config: Y, flavour: string, alias?: string) {
+  C extends Context<HttpFlags> = Context<HttpFlags>,
+> extends Adapter<CONF, CON, Q, C> {
+  protected constructor(config: CONF, flavour: string, alias?: string) {
     super(config, flavour, alias);
   }
 
@@ -75,7 +82,7 @@ export abstract class HttpAdapter<
       | OperationKeys.UPDATE
       | OperationKeys.DELETE,
     model: Constructor<M>,
-    overrides: Partial<F>
+    overrides: Partial<FlagsOf<C>>
   ) {
     return Object.assign(super.flags<M>(operation, model, overrides), {
       headers: {},
@@ -90,10 +97,10 @@ export abstract class HttpAdapter<
    * @return {Constructor<Repository<M, Q, HttpAdapter<Y, Q, F, C>, F, C>>} The repository constructor
    */
   override repository<M extends Model>(): Constructor<
-    Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
+    Repository<M, HttpAdapter<CONF, CON, Q, C>>
   > {
     return RestService as unknown as Constructor<
-      Repository<M, Q, HttpAdapter<Y, CON, Q, F, C>, F, C>
+      Repository<M, HttpAdapter<CONF, CON, Q, C>>
     >;
   }
 
@@ -104,17 +111,14 @@ export abstract class HttpAdapter<
    * @template M - The model type
    * @param {M} model - The model instance to prepare
    * @param pk - The primary key property name
+   * @param args
    * @return The prepared data
    */
   override prepare<M extends Model>(
     model: M,
-    pk: keyof M
-  ): {
-    record: Record<string, any>;
-    id: string;
-    transient?: Record<string, any>;
-  } {
-    const log = this.log.for(this.prepare);
+    ...args: ContextualArgs<C>
+  ): PreparedModel {
+    const { log } = this.logCtx(args, this.prepare);
     const result = Object.assign({}, model);
     if ((model as any)[PersistenceKeys.METADATA]) {
       log.silly(
@@ -130,7 +134,7 @@ export abstract class HttpAdapter<
 
     return {
       record: model,
-      id: model[pk] as string,
+      id: model[Model.pk(model.constructor as Constructor<M>)] as string,
     };
   }
 
@@ -148,10 +152,10 @@ export abstract class HttpAdapter<
   override revert<M extends Model>(
     obj: Record<string, any>,
     clazz: string | Constructor<M>,
-    pk: keyof M,
-    id: string | number | bigint
+    id: PrimaryKeyType,
+    ...args: ContextualArgs<C>
   ): M {
-    const log = this.log.for(this.revert);
+    const { log } = this.logCtx(args, this.revert);
     const ob: Record<string, any> = {};
     const m = (
       typeof clazz === "string" ? Model.build(ob, clazz) : new clazz(ob)
@@ -220,11 +224,11 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
    */
-  abstract override create(
-    tableName: string,
-    id: string | number,
+  abstract override create<M extends Model>(
+    tableName: Constructor<M>,
+    id: PrimaryKeyType,
     model: Record<string, any>,
-    ...args: any[]
+    ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
 
   /**
@@ -236,10 +240,10 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the retrieved resource
    */
-  abstract override read(
-    tableName: string,
-    id: string | number | bigint,
-    ...args: any[]
+  abstract override read<M extends Model>(
+    tableName: Constructor<M>,
+    id: PrimaryKeyType,
+    ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
 
   /**
@@ -252,11 +256,11 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
    */
-  abstract override update(
-    tableName: string,
+  abstract override update<M extends Model>(
+    tableName: Constructor<M>,
     id: string | number,
     model: Record<string, any>,
-    ...args: any[]
+    ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
 
   /**
@@ -268,10 +272,10 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the deletion result
    */
-  abstract override delete(
-    tableName: string,
-    id: string | number | bigint,
-    ...args: any[]
+  abstract override delete<M extends Model>(
+    tableName: Constructor<M>,
+    id: PrimaryKeyType,
+    ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
 
   /**
@@ -287,7 +291,7 @@ export abstract class HttpAdapter<
    * @throws {UnsupportedError} Always throws as this method is not supported by default
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  raw<R>(rawInput: Q, process: boolean, ...args: any[]): Promise<R> {
+  raw<R>(rawInput: Q, ...args: ContextualArgs<C>): Promise<R> {
     return Promise.reject(
       new UnsupportedError(
         "Api is not natively available for HttpAdapters. If required, please extends this class"
@@ -323,7 +327,11 @@ export abstract class HttpAdapter<
    * @return {Statement<Q, M, any>} A statement object for building queries
    * @throws {UnsupportedError} Always throws as this method is not supported by default
    */
-  override Statement<M extends Model>(): Statement<Q, M, any> {
+  override Statement<M extends Model>(): Statement<
+    M,
+    Adapter<CONF, CON, Q, C>,
+    any
+  > {
     throw new UnsupportedError(
       "Api is not natively available for HttpAdapters. If required, please extends this class"
     );

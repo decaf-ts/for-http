@@ -1,9 +1,7 @@
-import { Repository } from "@decaf-ts/core";
+import { Repository, Adapter } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import { Context } from "@decaf-ts/db-decorators";
-import { HttpFlags } from "./types";
 
 /**
  * @description Repository for REST API interactions
@@ -36,11 +34,9 @@ import { HttpFlags } from "./types";
  */
 export class RestRepository<
   M extends Model,
-  Q,
-  A extends HttpAdapter<any, any, Q, F, C>,
-  F extends HttpFlags = HttpFlags,
-  C extends Context<F> = Context<F>,
-> extends Repository<M, Q, A> {
+  A extends HttpAdapter<any, any, any>,
+  Q = A extends HttpAdapter<any, any, infer Q> ? Q : never,
+> extends Repository<M, A> {
   constructor(adapter: A, clazz?: Constructor<M>) {
     super(adapter, clazz);
   }
