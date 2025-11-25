@@ -107,6 +107,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
     tableName: Constructor<M> | string,
     id: PrimaryKeyType,
     model: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ..._args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     try {
@@ -127,7 +128,8 @@ export class AxiosHttpAdapter extends HttpAdapter<
   override async read<M extends Model>(
     tableName: Constructor<M> | string,
     id: PrimaryKeyType,
-    ..._args: ContextualArgs<Context<AxiosFlags>>
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     try {
       const url = this.url(tableName, {
