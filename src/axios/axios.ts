@@ -2,19 +2,8 @@ import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import {
-  BaseError,
-  ConflictError,
-  Context,
-  InternalError,
-  NotFoundError,
-  PrimaryKeyType,
-} from "@decaf-ts/db-decorators";
-import {
-  ContextualArgs,
-  AuthorizationError,
-  UnsupportedError,
-} from "@decaf-ts/core";
+import { BaseError, Context, PrimaryKeyType } from "@decaf-ts/db-decorators";
+import { ContextualArgs } from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
@@ -189,19 +178,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   override parseError<E extends BaseError>(err: Error, ...args: any[]): E {
-    const errs = [
-      InternalError,
-      AuthorizationError,
-      ConflictError,
-      NotFoundError,
-      UnsupportedError,
-    ];
-    for (const error of errs) {
-      if ((err as Error).message.includes(error.name))
-        return new error(err.message) as E;
-    }
-    return new InternalError(err.message) as E;
+    return HttpAdapter.parseError(err, ...args);
   }
 }

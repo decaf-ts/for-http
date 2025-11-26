@@ -1,20 +1,32 @@
 import {
   Adapter,
+  AuthorizationError,
   Condition,
+  ConnectionError,
   ContextualArgs,
+  ForbiddenError,
+  MigrationError,
+  ObserverError,
+  PagingError,
   PersistenceKeys,
   PreparedModel,
+  QueryError,
   Repository,
   Sequence,
   SequenceOptions,
   UnsupportedError,
 } from "@decaf-ts/core";
 import {
+  BadRequestError,
+  BaseError,
+  ConflictError,
   Context,
   FlagsOf,
   InternalError,
+  NotFoundError,
   OperationKeys,
   PrimaryKeyType,
+  SerializationError,
 } from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
@@ -357,5 +369,31 @@ export abstract class HttpAdapter<
     throw new UnsupportedError(
       "Api is not natively available for HttpAdapters. If required, please extends this class"
     );
+  }
+
+  static parseError<E extends BaseError>(
+    err: Error | string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: any[]
+  ): E {
+    const msg = typeof err === "string" ? err : err.message;
+    if (msg.includes(NotFoundError.name)) return new NotFoundError(err) as E;
+    if (msg.includes(ConflictError.name)) return new ConflictError(err) as E;
+    if (msg.includes(BadRequestError.name))
+      return new BadRequestError(err) as E;
+    if (msg.includes(QueryError.name)) return new QueryError(err) as E;
+    if (msg.includes(PagingError.name)) return new PagingError(err) as E;
+    if (msg.includes(UnsupportedError.name))
+      return new UnsupportedError(err) as E;
+    if (msg.includes(MigrationError.name)) return new MigrationError(err) as E;
+    if (msg.includes(ObserverError.name)) return new ObserverError(err) as E;
+    if (msg.includes(AuthorizationError.name))
+      return new AuthorizationError(err) as E;
+    if (msg.includes(ForbiddenError.name)) return new ForbiddenError(err) as E;
+    if (msg.includes(ConnectionError.name))
+      return new ConnectionError(err) as E;
+    if (msg.includes(SerializationError.name))
+      return new SerializationError(err) as E;
+    return new InternalError(err) as E;
   }
 }
