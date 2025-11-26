@@ -91,6 +91,6 @@
     "@decaf-ts/logging": "latest",
     "@decaf-ts/reflection": "latest",
     "@decaf-ts/transactional-decorators": "latest",
-    "axios": "^1.7.8"
+    "axios": "^1.13.2"
   }
 }
