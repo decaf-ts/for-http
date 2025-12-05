@@ -327,7 +327,7 @@ export abstract class HttpAdapter<
    * @throws {UnsupportedError} Always throws as this method is not supported by default
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Sequence(options: SequenceOptions): Promise<Sequence> {
+  override Sequence(options: SequenceOptions): Promise<Sequence> {
     return Promise.reject(
       new UnsupportedError(
         "Api is not natively available for HttpAdapters. If required, please extends this class"
