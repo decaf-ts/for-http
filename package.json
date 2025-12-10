@@ -1,6 +1,6 @@
 {
   "name": "@decaf-ts/for-http",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "http wrappers for decaf-ts",
   "type": "module",
   "exports": {
