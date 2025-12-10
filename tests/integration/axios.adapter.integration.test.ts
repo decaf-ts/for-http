@@ -1,14 +1,6 @@
 import { AxiosHttpAdapter } from "../../src/axios/axios";
 import type { HttpConfig } from "../../src/types";
 import { Context } from "@decaf-ts/db-decorators";
-import { pk, Repository } from "@decaf-ts/core";
-import {
-  model,
-  Model,
-  ModelArg,
-  required,
-} from "@decaf-ts/decorator-validation";
-import { RestService } from "../../src/index";
 import { Logging } from "@decaf-ts/logging";
 
 // Subclass to override client with a minimal implementation

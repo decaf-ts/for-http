@@ -4,6 +4,8 @@
 
 A lightweight HTTP adapter layer for decaf-ts that enables CRUD-style repositories and services over REST APIs. It defines a generic HttpAdapter with concrete implementations (e.g., Axios), a RestService for simple model-centric operations, and a RestRepository when you need repository decoration logic before submitting to the backend. Includes minimal types for configuration and request flags.
 
+> Release docs refreshed on 2025-11-26. See [workdocs/reports/RELEASE_NOTES.md](./workdocs/reports/RELEASE_NOTES.md) for ticket summaries.
+
 ![Licence](https://img.shields.io/github/license/decaf-ts/for-http.svg?style=plastic)
 ![GitHub language count](https://img.shields.io/github/languages/count/decaf-ts/for-http?style=plastic)
 ![GitHub top language](https://img.shields.io/github/languages/top/decaf-ts/for-http?style=plastic)
@@ -27,7 +29,7 @@ A lightweight HTTP adapter layer for decaf-ts that enables CRUD-style repositori
 
 Documentation available [here](https://decaf-ts.github.io/for-http/)
 
-Minimal size: 1.4 KB kb gzipped
+Minimal size: 3.1 KB kb gzipped
 
 
 # decaf-ts/for-http — Detailed Description
@@ -323,6 +325,9 @@ const f: AxiosFlags = { headers: { "X-Trace": "1" } };
   - strategy;
   - builder;
   - etc;
+
+## Release Documentation Hooks
+Stay aligned with the automated release pipeline by reviewing [Release Notes](./workdocs/reports/RELEASE_NOTES.md) and [Dependencies](./workdocs/reports/DEPENDENCIES.md) after trying these recipes (updated on 2025-11-26).
 
 
 ### Related

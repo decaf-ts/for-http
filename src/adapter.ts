@@ -42,6 +42,7 @@ import { RestService } from "./RestService";
 import { Statement } from "@decaf-ts/core";
 import { prepared, QueryOptions } from "@decaf-ts/core";
 import { toKebabCase } from "@decaf-ts/logging";
+import { HttpStatement } from "./HttpStatement";
 
 /**
  * @description Abstract HTTP adapter for REST API interactions
@@ -369,8 +370,8 @@ export abstract class HttpAdapter<
    * @throws {UnsupportedError} Always throws as this method is not supported by default
    */
   raw<R>(rawInput: Q, ...args: ContextualArgs<C>): Promise<R> {
-    const { ctxArgs } = this.logCtx(args, this.raw);
-    const req = this.toRequest(rawInput);
+    const { ctxArgs, ctx } = this.logCtx(args, this.raw);
+    const req = this.toRequest(rawInput, ctx);
     return this.request(req, ...ctxArgs);
   }
 
@@ -407,9 +408,7 @@ export abstract class HttpAdapter<
     Adapter<CONF, CON, Q, C>,
     any
   > {
-    throw new UnsupportedError(
-      "Api is not natively available for HttpAdapters. If required, please extends this class"
-    );
+    return new HttpStatement(this);
   }
 
   /**
@@ -458,6 +457,7 @@ export abstract class HttpAdapter<
     super.decoration();
     function query(options: QueryOptions) {
       return function query(obj: object, prop?: any, descriptor?: any) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         function innerQuery(options: QueryOptions) {
           return function innerQuery(
             obj: any,

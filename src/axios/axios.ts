@@ -108,11 +108,11 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
     if (query) {
       req.method = "GET";
-      req.url = this.url(query.class, [
-        PersistenceKeys.STATEMENT,
-        query.method,
-        ...query.args,
-      ]);
+      req.url = this.url(
+        query.class,
+        [PersistenceKeys.STATEMENT, query.method, ...query.args],
+        query.params as any
+      );
     }
     return req;
   }

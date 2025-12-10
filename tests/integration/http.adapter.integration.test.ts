@@ -8,7 +8,6 @@ import {
   PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
 import type { HttpConfig } from "../../src/types";
-import { Model } from "@decaf-ts/decorator-validation";
 
 class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
   constructor(config: HttpConfig, alias?: string) {
@@ -102,10 +101,6 @@ describe("HttpAdapter base features", () => {
         cycle: false,
       })
     ).rejects.toBeInstanceOf(UnsupportedError);
-  });
-
-  test("Statement() should throw UnsupportedError", () => {
-    expect(() => adapter.Statement<Model>()).toThrow(UnsupportedError);
   });
 
   test("parseCondition() should throw UnsupportedError", () => {

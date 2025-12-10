@@ -29,5 +29,5 @@ export type HttpQuery = {
   class: ModelConstructor<any> | string;
   method: string;
   args: any[];
-  query?: Record<"limit" | "skip", number>;
+  params?: Record<"limit" | "skip", number>;
 };
