@@ -12,6 +12,7 @@ import { RestRepository } from "../../src";
 
 import { TimestampValidator } from "@decaf-ts/db-decorators";
 import { Model } from "@decaf-ts/decorator-validation";
+import { toKebabCase } from "@decaf-ts/logging";
 console.log(TimestampValidator);
 const cfg: HttpConfig = {
   protocol: "http",
@@ -73,6 +74,8 @@ describe("RestRepository", function () {
     age: 18,
   });
 
+  const table = toKebabCase(Model.tableName(OtherTestModel));
+
   let created: OtherTestModel;
   let updated: OtherTestModel;
 
@@ -91,8 +94,9 @@ describe("RestRepository", function () {
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}`,
-      created
+      `${cfg.protocol}://${cfg.host}/${table}`,
+      created,
+      { headers: expect.any(Object) }
     );
     expect(created).toBeInstanceOf(OtherTestModel);
     expect(created.equals(model)).toBe(false);
@@ -108,9 +112,7 @@ describe("RestRepository", function () {
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
-      encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}?id=${model.id}`
-      )
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
     );
     expect(read).toBeInstanceOf(OtherTestModel);
     expect(read.equals(created)).toBe(true);
@@ -135,7 +137,7 @@ describe("RestRepository", function () {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}`,
+      `${cfg.protocol}://${cfg.host}/${table}`,
       updated
     );
 
@@ -157,9 +159,7 @@ describe("RestRepository", function () {
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Model.tableName(OtherTestModel)}?id=${model.id}`
-      )
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
     );
   });
 });

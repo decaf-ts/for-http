@@ -54,8 +54,8 @@ import { RestRepository } from "./RestRepository";
  */
 export class RestService<
   M extends Model,
-  A extends HttpAdapter<any, any, any, any>,
-  Q = A extends HttpAdapter<any, any, infer Q, any> ? Q : never,
+  A extends HttpAdapter<any, any, any, any, any>,
+  Q = A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never,
 > extends RestRepository<M, A, Q> {
   protected override _overrides: Partial<FlagsOf<A>> = {
     ignoreValidation: true,

@@ -93,13 +93,6 @@ describe("HttpAdapter base features", () => {
     expect(parsed.message).toBe(`[InternalError] ${err.message}`);
   });
 
-  test("raw() should throw UnsupportedError", async () => {
-    const ctx = new Context();
-    await expect(adapter.raw<any>({} as any, ctx)).rejects.toBeInstanceOf(
-      UnsupportedError
-    );
-  });
-
   test("Sequence() should throw UnsupportedError", async () => {
     await expect(
       adapter.Sequence({

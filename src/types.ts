@@ -1,4 +1,5 @@
 import { RepositoryFlags } from "@decaf-ts/db-decorators";
+import { ModelConstructor } from "@decaf-ts/decorator-validation";
 
 /**
  * @description HTTP configuration type
@@ -23,3 +24,10 @@ export type HttpConfig = {
 export interface HttpFlags extends RepositoryFlags {
   headers?: Record<string, string>;
 }
+
+export type HttpQuery = {
+  class: ModelConstructor<any> | string;
+  method: string;
+  args: any[];
+  query?: Record<"limit" | "skip", number>;
+};

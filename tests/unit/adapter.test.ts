@@ -2,6 +2,8 @@ import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";
+import { Context } from "@decaf-ts/db-decorators";
+import { Logging } from "@decaf-ts/logging";
 
 const cfg: HttpConfig = {
   protocol: "http",
@@ -9,7 +11,7 @@ const cfg: HttpConfig = {
 };
 
 describe("Axios adapter", function () {
-  let adapter: HttpAdapter<any, unknown, unknown>;
+  let adapter: HttpAdapter<any, any, any, any, any>;
 
   beforeAll(function () {
     adapter = new AxiosHttpAdapter(cfg);
@@ -43,12 +45,14 @@ describe("Axios adapter", function () {
         return Object.assign({}, data);
       }
     );
-    const created = await adapter.create(tableName, id, record);
+    const ctx = new Context().accumulate({ logger: Logging.get() });
+    const created = await adapter.create(tableName, id, record, ctx);
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${tableName}`,
-      record
+      record,
+      {}
     );
   });
 
@@ -57,7 +61,9 @@ describe("Axios adapter", function () {
     getMock.mockImplementation(async (url: string) => {
       return Object.assign({}, record);
     });
-    const read = await adapter.read(tableName, id);
+    const ctx = new Context().accumulate({ logger: Logging.get() });
+
+    const read = await adapter.read(tableName, id, ctx);
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
@@ -71,7 +77,9 @@ describe("Axios adapter", function () {
         return Object.assign({}, data);
       }
     );
-    const updated = await adapter.update(tableName, id, record);
+    const ctx = new Context().accumulate({ logger: Logging.get() });
+
+    const updated = await adapter.update(tableName, id, record, ctx);
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
@@ -85,7 +93,9 @@ describe("Axios adapter", function () {
     deleteMock.mockImplementation(async (url: string) => {
       return Object.assign({}, record);
     });
-    const deleted = await adapter.delete(tableName, id);
+    const ctx = new Context().accumulate({ logger: Logging.get() });
+
+    const deleted = await adapter.delete(tableName, id, ctx);
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(

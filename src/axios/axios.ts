@@ -1,9 +1,13 @@
 import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
-import { HttpConfig } from "../types";
+import { HttpConfig, HttpQuery } from "../types";
 import { AxiosFlags } from "./types";
 import { BaseError, Context, PrimaryKeyType } from "@decaf-ts/db-decorators";
-import { ContextualArgs } from "@decaf-ts/core";
+import {
+  ContextualArgs,
+  MaybeContextualArg,
+  PersistenceKeys,
+} from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
@@ -59,6 +63,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
   HttpConfig,
   Axios,
   AxiosRequestConfig,
+  HttpQuery,
   Context<AxiosFlags>
 > {
   constructor(config: HttpConfig, alias?: string) {
@@ -71,6 +76,47 @@ export class AxiosHttpAdapter extends HttpAdapter<
     } as AxiosRequestConfig);
   }
 
+  override toRequest(query: HttpQuery): AxiosRequestConfig;
+  override toRequest(ctx: Context<AxiosFlags>): AxiosRequestConfig;
+  override toRequest(
+    query: HttpQuery,
+    ctx: Context<AxiosFlags>
+  ): AxiosRequestConfig;
+  override toRequest(
+    ctxOrQuery: Context<AxiosFlags> | HttpQuery,
+    ctx?: Context<AxiosFlags>
+  ): AxiosRequestConfig {
+    let query: HttpQuery | undefined;
+    let context: Context<AxiosFlags> | undefined;
+
+    if (ctxOrQuery instanceof Context) {
+      context = ctxOrQuery;
+      query = undefined; // In this overload, ctx is actually the query
+    } else {
+      query = ctxOrQuery;
+      context = ctx;
+    }
+
+    const req: AxiosRequestConfig = {};
+    if (context) {
+      try {
+        req.headers = context.get("headers") || {};
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e: unknown) {
+        // do nothing
+      }
+    }
+    if (query) {
+      req.method = "GET";
+      req.url = this.url(query.class, [
+        PersistenceKeys.STATEMENT,
+        query.method,
+        ...query.args,
+      ]);
+    }
+    return req;
+  }
+
   /**
    * @description Sends an HTTP request using Axios
    * @summary Implementation of the abstract request method from HttpAdapter.
@@ -79,8 +125,19 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @param {AxiosRequestConfig} details - The Axios request configuration
    * @return {Promise<V>} A promise that resolves with the response data
    */
-  override async request<V>(details: AxiosRequestConfig): Promise<V> {
-    return this.client.request(details);
+  override async request<V>(
+    details: AxiosRequestConfig,
+    ...args: MaybeContextualArg<Context<AxiosFlags>>
+  ): Promise<V> {
+    let overrides = {};
+    try {
+      const { ctx } = this.logCtx(args, this.request);
+      overrides = this.toRequest(ctx);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e: unknown) {
+      // do nothing
+    }
+    return this.client.request(Object.assign({}, details, overrides));
   }
 
   /**
@@ -96,12 +153,16 @@ export class AxiosHttpAdapter extends HttpAdapter<
     tableName: Constructor<M> | string,
     id: PrimaryKeyType,
     model: Record<string, any>,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ..._args: ContextualArgs<Context<AxiosFlags>>
+    ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
+    const { log, ctx } = this.logCtx(args, this.create);
     try {
       const url = this.url(tableName);
-      return this.client.post(url, model);
+      const cfg = this.toRequest(ctx);
+      log.debug(
+        `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
+      );
+      return this.client.post(url, model, cfg);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -117,13 +178,15 @@ export class AxiosHttpAdapter extends HttpAdapter<
   override async read<M extends Model>(
     tableName: Constructor<M> | string,
     id: PrimaryKeyType,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
+    const { log, ctx } = this.logCtx(args, this.read);
     try {
       const url = this.url(tableName, {
         id: id as string | number,
       });
+      const cfg = this.toRequest(ctx);
+      log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
       return this.client.get(url);
     } catch (e: any) {
       throw this.parseError(e);
@@ -141,13 +204,17 @@ export class AxiosHttpAdapter extends HttpAdapter<
    */
   override async update<M extends Model>(
     tableName: Constructor<M> | string,
-    id: string | number,
+    id: PrimaryKeyType,
     model: Record<string, any>,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ..._args: ContextualArgs<Context<AxiosFlags>>
+    ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
+    const { log, ctx } = this.logCtx(args, this.update);
     try {
       const url = this.url(tableName);
+      const cfg = this.toRequest(ctx);
+      log.debug(
+        `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
+      );
       return this.client.put(url, model);
     } catch (e: any) {
       throw this.parseError(e);
@@ -165,13 +232,15 @@ export class AxiosHttpAdapter extends HttpAdapter<
   override async delete<M extends Model>(
     tableName: Constructor<M> | string,
     id: PrimaryKeyType,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ..._args: ContextualArgs<Context<AxiosFlags>>
+    ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
+    const { log, ctx } = this.logCtx(args, this.delete);
     try {
       const url = this.url(tableName, {
         id: id as string | number,
       });
+      const cfg = this.toRequest(ctx);
+      log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
       return this.client.delete(url);
     } catch (e: any) {
       throw this.parseError(e);

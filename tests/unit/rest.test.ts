@@ -7,6 +7,7 @@ import { Repository } from "@decaf-ts/core";
 import { RestService } from "../../src";
 import { IRepository } from "@decaf-ts/db-decorators";
 import { Model } from "@decaf-ts/decorator-validation";
+import { toKebabCase } from "@decaf-ts/logging";
 
 const cfg: HttpConfig = {
   protocol: "http",
@@ -46,6 +47,8 @@ describe("Rest Service", () => {
     age: 18,
   });
 
+  const table = toKebabCase(Model.tableName(TestModel));
+
   it("finds the right repository", () => {
     repo = Repository.forModel(TestModel);
     expect(repo).toBeInstanceOf(RestService);
@@ -60,10 +63,10 @@ describe("Rest Service", () => {
     const created = await repo.create(model);
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
-    const table = Model.tableName(TestModel);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}`,
-      model
+      model,
+      { headers: expect.any(Object) }
     );
     expect(created).toBeInstanceOf(TestModel);
     expect(created.equals(model)).toBe(true);
@@ -73,7 +76,6 @@ describe("Rest Service", () => {
     const read = await repo.read(model.id);
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
-    const table = Model.tableName(TestModel);
 
     expect(getMock).toHaveBeenCalledWith(
       encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
@@ -97,7 +99,7 @@ describe("Rest Service", () => {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${Model.tableName(TestModel)}`,
+      `${cfg.protocol}://${cfg.host}/${table}`,
       toUpdate
     );
 
@@ -114,9 +116,7 @@ describe("Rest Service", () => {
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(
-        `${cfg.protocol}://${cfg.host}/${Model.tableName(TestModel)}?id=${model.id}`
-      )
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
     );
   });
 });

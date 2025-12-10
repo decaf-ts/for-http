@@ -5,6 +5,7 @@ import {
   ConnectionError,
   ContextualArgs,
   ForbiddenError,
+  MaybeContextualArg,
   MigrationError,
   ObserverError,
   PagingError,
@@ -28,11 +29,19 @@ import {
   PrimaryKeyType,
   SerializationError,
 } from "@decaf-ts/db-decorators";
-import { HttpConfig, HttpFlags } from "./types";
+import { HttpConfig, HttpFlags, HttpQuery } from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
-import { Constructor } from "@decaf-ts/decoration";
+import {
+  apply,
+  Constructor,
+  Decoration,
+  methodMetadata,
+  Metadata,
+} from "@decaf-ts/decoration";
 import { RestService } from "./RestService";
 import { Statement } from "@decaf-ts/core";
+import { prepared, QueryOptions } from "@decaf-ts/core";
+import { toKebabCase } from "@decaf-ts/logging";
 
 /**
  * @description Abstract HTTP adapter for REST API interactions
@@ -69,7 +78,8 @@ import { Statement } from "@decaf-ts/core";
 export abstract class HttpAdapter<
   CONF extends HttpConfig,
   CON,
-  Q,
+  REQ,
+  Q extends HttpQuery = HttpQuery,
   C extends Context<HttpFlags> = Context<HttpFlags>,
 > extends Adapter<CONF, CON, Q, C> {
   protected constructor(config: CONF, flavour: string, alias?: string) {
@@ -87,7 +97,7 @@ export abstract class HttpAdapter<
    * @param {Partial<F>} overrides - Optional flag overrides
    * @return {F} The flags object with headers
    */
-  override flags<M extends Model>(
+  override async flags<M extends Model>(
     operation:
       | OperationKeys.CREATE
       | OperationKeys.READ
@@ -96,7 +106,7 @@ export abstract class HttpAdapter<
     model: Constructor<M>,
     overrides: Partial<FlagsOf<C>>
   ) {
-    return Object.assign(super.flags<M>(operation, model, overrides), {
+    return Object.assign(await super.flags<M>(operation, model, overrides), {
       headers: {},
     });
   }
@@ -194,24 +204,69 @@ export abstract class HttpAdapter<
   }
 
   protected toTableName<M extends Model>(t: string | Constructor<M>) {
-    return typeof t === "string" ? t : Model.tableName(t);
+    return typeof t === "string" ? t : toKebabCase(Model.tableName(t));
   }
 
   /**
    * @description Constructs a URL for API requests
    * @summary Builds a complete URL for API requests using the configured protocol and host,
    * the specified table name, and optional query parameters. The method handles URL encoding.
-   * @param {string} tableName - The name of the table or endpoint
+   * @param {string | Constructor} tableName - The name of the table or endpoint
+   * @return {string} The encoded URL string
+   */
+  url<M extends Model>(tableName: string | Constructor<M>): string;
+  /**
+   * @description Constructs a URL for API requests
+   * @summary Builds a complete URL for API requests using the configured protocol and host,
+   * the specified table name, and optional query parameters. The method handles URL encoding.
+   * @param {string | Constructor} tableName - The name of the table or endpoint
+   * @param {string[]} pathParams - Optional query parameters
+   * @return {string} The encoded URL string
+   */
+  url<M extends Model>(
+    tableName: string | Constructor<M>,
+    pathParams: string[]
+  ): string;
+  /**
+   * @description Constructs a URL for API requests
+   * @summary Builds a complete URL for API requests using the configured protocol and host,
+   * the specified table name, and optional query parameters. The method handles URL encoding.
+   * @param {string | Constructor} tableName - The name of the table or endpoint
+   * @param {Record<string, string | number>} queryParams - Optional query parameters
+   * @return {string} The encoded URL string
+   */
+  url<M extends Model>(
+    tableName: string | Constructor<M>,
+    queryParams: Record<string, string | number>
+  ): string;
+  url<M extends Model>(
+    tableName: string | Constructor<M>,
+    pathParams: string[],
+    queryParams: Record<string, string | number>
+  ): string;
+  /**
+   * @description Constructs a URL for API requests
+   * @summary Builds a complete URL for API requests using the configured protocol and host,
+   * the specified table name, and optional query parameters. The method handles URL encoding.
+   * @param {string | Constructor} tableName - The name of the table or endpoint
+   * @param {string[]} [pathParams] - Optional query parameters
    * @param {Record<string, string | number>} [queryParams] - Optional query parameters
    * @return {string} The encoded URL string
    */
   url<M extends Model>(
     tableName: string | Constructor<M>,
+    pathParams?: string[] | Record<string, string | number>,
     queryParams?: Record<string, string | number>
-  ) {
+  ): string {
+    if (!queryParams) {
+      if (pathParams && !Array.isArray(pathParams)) {
+        queryParams = pathParams;
+        pathParams = [];
+      }
+    }
     tableName = this.toTableName(tableName);
     const url = new URL(
-      `${this.config.protocol}://${this.config.host}/${tableName}`
+      `${this.config.protocol}://${this.config.host}/${tableName}${pathParams && pathParams.length ? `/${(pathParams as string[]).join("/")}` : ""}`
     );
     if (queryParams)
       Object.entries(queryParams).forEach(([key, value]) =>
@@ -222,15 +277,20 @@ export abstract class HttpAdapter<
     return encodeURI(url.toString()).replace(/\+/g, "%20");
   }
 
+  abstract toRequest(query: Q): REQ;
+  abstract toRequest(ctx: C): REQ;
+  abstract toRequest(query: Q, ctx: C): REQ;
+  abstract toRequest(ctxOrQuery: C | Q, ctx?: C): REQ;
+
   /**
    * @description Sends an HTTP request
    * @summary Abstract method that must be implemented by subclasses to send HTTP requests
    * using the native HTTP client. This is the core method for making API calls.
    * @template V - The response value type
-   * @param {Q} details - The request details specific to the HTTP client
+   * @param {REQ} details - The request details specific to the HTTP client
    * @return {Promise<V>} A promise that resolves with the response data
    */
-  abstract request<V>(details: Q): Promise<V>;
+  abstract request<V>(details: REQ, ...args: MaybeContextualArg<C>): Promise<V>;
 
   /**
    * @description Creates a new resource
@@ -308,13 +368,10 @@ export abstract class HttpAdapter<
    * @return {Promise<R>} A promise that resolves with the query result
    * @throws {UnsupportedError} Always throws as this method is not supported by default
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   raw<R>(rawInput: Q, ...args: ContextualArgs<C>): Promise<R> {
-    return Promise.reject(
-      new UnsupportedError(
-        "Api is not natively available for HttpAdapters. If required, please extends this class"
-      )
-    );
+    const { ctxArgs } = this.logCtx(args, this.raw);
+    const req = this.toRequest(rawInput);
+    return this.request(req, ...ctxArgs);
   }
 
   /**
@@ -396,4 +453,64 @@ export abstract class HttpAdapter<
       return new SerializationError(err) as E;
     return new InternalError(err) as E;
   }
+
+  static override decoration() {
+    super.decoration();
+    function query(options: QueryOptions) {
+      return function query(obj: object, prop?: any, descriptor?: any) {
+        function innerQuery(options: QueryOptions) {
+          return function innerQuery(
+            obj: any,
+            propertyKey?: any,
+            descriptor?: any
+          ) {
+            (descriptor as TypedPropertyDescriptor<any>).value = new Proxy(
+              (descriptor as TypedPropertyDescriptor<any>).value,
+              {
+                async apply(
+                  target: any,
+                  thisArg: any,
+                  args: any[]
+                ): Promise<any> {
+                  const repo = thisArg as Repository<any, any>;
+
+                  const contextArgs = await Context.args<any, any>(
+                    propertyKey,
+                    repo.class,
+                    args,
+                    repo["adapter"],
+                    repo["_overrides"] || {}
+                  );
+                  const { log, ctxArgs } = repo["logCtx"](
+                    contextArgs.args,
+                    target
+                  );
+                  log.verbose(`Running prepared statement ${target.name}`);
+                  log.debug(`With args: ${JSON.stringify(args, null, 2)}`);
+                  return (thisArg as Repository<any, any>).statement(
+                    target.name,
+                    ...ctxArgs
+                  );
+                },
+              }
+            );
+          };
+        }
+
+        return apply(
+          methodMetadata(Metadata.key(PersistenceKeys.QUERY, prop), options),
+          prepared(),
+          innerQuery(options)
+        )(obj, prop, descriptor);
+      };
+    }
+
+    Decoration.for(PersistenceKeys.QUERY)
+      .define({
+        decorator: query,
+      } as any)
+      .apply();
+  }
 }
+
+HttpAdapter.decoration();

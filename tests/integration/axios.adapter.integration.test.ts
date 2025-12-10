@@ -1,6 +1,15 @@
 import { AxiosHttpAdapter } from "../../src/axios/axios";
 import type { HttpConfig } from "../../src/types";
 import { Context } from "@decaf-ts/db-decorators";
+import { pk, Repository } from "@decaf-ts/core";
+import {
+  model,
+  Model,
+  ModelArg,
+  required,
+} from "@decaf-ts/decorator-validation";
+import { RestService } from "../../src/index";
+import { Logging } from "@decaf-ts/logging";
 
 // Subclass to override client with a minimal implementation
 class TestAxiosAdapter extends AxiosHttpAdapter {
@@ -42,7 +51,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       `axios-${Math.random()}`
     );
 
-    const ctx = new Context();
+    const ctx = new Context().accumulate({ logger: Logging.get() });
 
     const created = await adapter.create("users", 1, { name: "A" }, ctx);
     expect(created.method).toBe("post");
@@ -78,7 +87,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       },
     };
     const adapter = new TestAxiosAdapter(config, failingClient);
-    const ctx = new Context();
+    const ctx = new Context().accumulate({ logger: Logging.get() });
     await expect(adapter.create("users", 1, {}, ctx)).rejects.toBe(boom);
     await expect(adapter.read("users", 1, ctx)).rejects.toBe(boom);
     await expect(adapter.update("users", 1, {}, ctx)).rejects.toBe(boom);
