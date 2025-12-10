@@ -28,6 +28,7 @@ import {
   OperationKeys,
   PrimaryKeyType,
   SerializationError,
+  ValidationError,
 } from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags, HttpQuery } from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
@@ -433,10 +434,14 @@ export abstract class HttpAdapter<
     ...args: any[]
   ): E {
     const msg = typeof err === "string" ? err : err.message;
-    if (msg.includes(NotFoundError.name)) return new NotFoundError(err) as E;
-    if (msg.includes(ConflictError.name)) return new ConflictError(err) as E;
-    if (msg.includes(BadRequestError.name))
+    if (msg.includes(NotFoundError.name) || msg.includes("404"))
+      return new NotFoundError(err) as E;
+    if (msg.includes(ConflictError.name) || msg.includes("409"))
+      return new ConflictError(err) as E;
+    if (msg.includes(BadRequestError.name) || msg.includes("400"))
       return new BadRequestError(err) as E;
+    if (msg.includes(ValidationError.name) || msg.includes("422"))
+      return new ValidationError(err) as E;
     if (msg.includes(QueryError.name)) return new QueryError(err) as E;
     if (msg.includes(PagingError.name)) return new PagingError(err) as E;
     if (msg.includes(UnsupportedError.name))
