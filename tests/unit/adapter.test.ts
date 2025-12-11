@@ -83,7 +83,7 @@ describe("Axios adapter", function () {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${tableName}`,
+      `${cfg.protocol}://${cfg.host}/${tableName}/${updated.id}`,
       record
     );
   });

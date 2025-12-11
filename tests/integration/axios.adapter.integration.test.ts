@@ -55,7 +55,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
 
     const updated = await adapter.update("users", 3, { name: "B" }, ctx);
     expect(updated.method).toBe("put");
-    expect(updated.url).toBe("https://example.com/users");
+    expect(updated.url).toBe("https://example.com/users/3");
 
     const deleted = await adapter.delete("users", 4, ctx);
     expect(deleted.method).toBe("delete");

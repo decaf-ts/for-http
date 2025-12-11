@@ -208,7 +208,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     const { log, ctx } = this.logCtx(args, this.update);
     try {
-      const url = this.url(tableName);
+      const url = this.url(tableName, [id as string]);
       const cfg = this.toRequest(ctx);
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`

@@ -137,7 +137,7 @@ describe("RestRepository", function () {
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}`,
+      `${cfg.protocol}://${cfg.host}/${table}/${model.id}`,
       updated
     );
 
