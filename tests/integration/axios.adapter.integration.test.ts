@@ -51,7 +51,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
 
     const read = await adapter.read("users", 2, ctx);
     expect(read.method).toBe("get");
-    expect(read.url).toBe("https://example.com/users?id=2");
+    expect(read.url).toBe("https://example.com/users/2");
 
     const updated = await adapter.update("users", 3, { name: "B" }, ctx);
     expect(updated.method).toBe("put");
@@ -59,7 +59,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
 
     const deleted = await adapter.delete("users", 4, ctx);
     expect(deleted.method).toBe("delete");
-    expect(deleted.url).toBe("https://example.com/users?id=4");
+    expect(deleted.url).toBe("https://example.com/users/4");
   });
 
   test("CRUD methods throw parsed error when client fails", async () => {

@@ -67,7 +67,7 @@ describe("Axios adapter", function () {
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}?id=${id}`)
+      encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`)
     );
   });
 
@@ -99,7 +99,7 @@ describe("Axios adapter", function () {
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}?id=${id}`)
+      encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`)
     );
   });
 });

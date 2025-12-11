@@ -78,7 +78,7 @@ describe("Rest Service", () => {
     expect(getMock).toHaveBeenCalledTimes(1);
 
     expect(getMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
     );
     expect(read).toBeInstanceOf(TestModel);
     expect(read.equals(model)).toBe(true);
@@ -116,7 +116,7 @@ describe("Rest Service", () => {
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
     );
   });
 });

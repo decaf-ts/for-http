@@ -112,7 +112,7 @@ describe("RestRepository", function () {
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
     );
     expect(read).toBeInstanceOf(OtherTestModel);
     expect(read.equals(created)).toBe(true);
@@ -159,7 +159,7 @@ describe("RestRepository", function () {
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}?id=${model.id}`)
+      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
     );
   });
 });
