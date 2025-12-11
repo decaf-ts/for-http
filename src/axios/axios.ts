@@ -182,7 +182,10 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     const { log, ctx } = this.logCtx(args, this.read);
     try {
-      const url = this.url(tableName, [id as string]);
+      const url = this.url(
+        tableName,
+        this.extractIdArgs(tableName, id as string)
+      );
       const cfg = this.toRequest(ctx);
       log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
       return this.client.get(url);
@@ -208,7 +211,10 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     const { log, ctx } = this.logCtx(args, this.update);
     try {
-      const url = this.url(tableName, [id as string]);
+      const url = this.url(
+        tableName,
+        this.extractIdArgs(tableName, id as string)
+      );
       const cfg = this.toRequest(ctx);
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
@@ -234,7 +240,10 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     const { log, ctx } = this.logCtx(args, this.delete);
     try {
-      const url = this.url(tableName, [id as string]);
+      const url = this.url(
+        tableName,
+        this.extractIdArgs(tableName, id as string)
+      );
       const cfg = this.toRequest(ctx);
       log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
       return this.client.delete(url);

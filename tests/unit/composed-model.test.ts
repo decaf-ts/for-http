@@ -10,7 +10,7 @@ import {
 } from "@decaf-ts/decorator-validation";
 import { RestRepository } from "../../src";
 
-import { TimestampValidator } from "@decaf-ts/db-decorators";
+import { composed, TimestampValidator } from "@decaf-ts/db-decorators";
 import { Model } from "@decaf-ts/decorator-validation";
 import { toKebabCase } from "@decaf-ts/logging";
 console.log(TimestampValidator);
@@ -20,9 +20,10 @@ const cfg: HttpConfig = {
 };
 
 @model()
-class OtherTestModel extends Model {
-  @pk({ type: "Number" })
-  id!: number;
+class ComposedTestModel extends Model {
+  @composed(["name", "age"])
+  @pk()
+  id!: string;
 
   @required()
   name!: string;
@@ -31,25 +32,28 @@ class OtherTestModel extends Model {
   @step(1)
   age!: number;
 
+  @required()
+  address!: string;
+
   @createdAt()
   createdAt!: Date;
 
   @updatedAt()
   updatedAt!: Date;
 
-  constructor(arg?: ModelArg<OtherTestModel>) {
+  constructor(arg?: ModelArg<ComposedTestModel>) {
     super(arg);
   }
 }
 
 describe("RestRepository", function () {
   let adapter: HttpAdapter<any, any, any>;
-  let repo: RestRepository<OtherTestModel, any, HttpAdapter<any, any, any>>;
+  let repo: RestRepository<ComposedTestModel, any, HttpAdapter<any, any, any>>;
 
   beforeAll(function () {
     adapter = new AxiosHttpAdapter(cfg);
     expect(adapter).toBeDefined();
-    repo = new RestRepository(adapter, OtherTestModel);
+    repo = new RestRepository(adapter, ComposedTestModel);
   });
 
   let getMock: any;
@@ -66,19 +70,19 @@ describe("RestRepository", function () {
     deleteMock = jest.spyOn(adapter.client as Axios, "delete");
   });
 
-  const model: OtherTestModel = new OtherTestModel({
-    id: 1,
+  const model: ComposedTestModel = new ComposedTestModel({
     name: "name",
     age: 18,
+    address: "blah",
   });
 
-  const table = toKebabCase(Model.tableName(OtherTestModel));
+  const table = toKebabCase(Model.tableName(ComposedTestModel));
 
-  let created: OtherTestModel;
-  let updated: OtherTestModel;
+  let created: ComposedTestModel;
+  let updated: ComposedTestModel;
 
   it("finds the right repository", () => {
-    repo = Repository.forModel(OtherTestModel);
+    repo = Repository.forModel(ComposedTestModel);
     expect(repo).toBeInstanceOf(RestRepository);
   });
 
@@ -96,9 +100,9 @@ describe("RestRepository", function () {
       created,
       { headers: expect.any(Object) }
     );
-    expect(created).toBeInstanceOf(OtherTestModel);
+    expect(created).toBeInstanceOf(ComposedTestModel);
     expect(created.equals(model)).toBe(false);
-    expect(created.equals(model, "createdAt", "updatedAt")).toBe(true);
+    expect(created.equals(model, "createdAt", "updatedAt", "id")).toBe(true);
   });
 
   it("reads", async function () {
@@ -106,13 +110,15 @@ describe("RestRepository", function () {
     getMock.mockImplementation(async (url: string) => {
       return Object.assign({}, created);
     });
-    const read = await repo.read(model.id);
+    const read = await repo.read(created.id);
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
+      encodeURI(
+        `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`
+      )
     );
-    expect(read).toBeInstanceOf(OtherTestModel);
+    expect(read).toBeInstanceOf(ComposedTestModel);
     expect(read.equals(created)).toBe(true);
   });
 
@@ -127,21 +133,21 @@ describe("RestRepository", function () {
       return Object.assign({}, created);
     });
 
-    const toUpdate = new OtherTestModel(
-      Object.assign({}, { id: model.id }, { name: "updated" })
+    const toUpdate = new ComposedTestModel(
+      Object.assign({}, created, { address: "other" })
     );
 
     updated = await repo.update(toUpdate);
     expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}/${model.id}`,
+      `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
       updated
     );
 
-    expect(updated).toBeInstanceOf(OtherTestModel);
+    expect(updated).toBeInstanceOf(ComposedTestModel);
     expect(updated.equals(created)).toBe(false);
-    expect(updated.equals(created, "updatedAt", "name")).toBe(true);
+    expect(updated.equals(created, "updatedAt", "address")).toBe(true);
   });
 
   it("deletes", async function () {
@@ -153,11 +159,13 @@ describe("RestRepository", function () {
     getMock.mockImplementation(async (url: string, id: string) => {
       return Object.assign({}, updated);
     });
-    const deleted = await repo.delete(model.id);
+    const deleted = await repo.delete(created.id);
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
+      encodeURI(
+        `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`
+      )
     );
   });
 });

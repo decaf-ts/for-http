@@ -266,6 +266,7 @@ export abstract class HttpAdapter<
         pathParams = [];
       }
     }
+
     tableName = this.toTableName(tableName);
     const url = new URL(
       `${this.config.protocol}://${this.config.host}/${tableName}${pathParams && pathParams.length ? `/${(pathParams as string[]).join("/")}` : ""}`
@@ -293,6 +294,17 @@ export abstract class HttpAdapter<
    * @return {Promise<V>} A promise that resolves with the response data
    */
   abstract request<V>(details: REQ, ...args: MaybeContextualArg<C>): Promise<V>;
+
+  protected extractIdArgs<M extends Model>(
+    model: Constructor<M> | string,
+    id: PrimaryKeyType
+  ): string[] {
+    const idStr = id.toString();
+    if (typeof model === "string") return [idStr];
+    const composed = Model.composed(model, Model.pk(model));
+    if (!composed) return [idStr];
+    return idStr.split(composed.separator);
+  }
 
   /**
    * @description Creates a new resource
