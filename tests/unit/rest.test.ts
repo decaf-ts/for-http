@@ -1,9 +1,10 @@
+import "@decaf-ts/core";
+import { Repository } from "@decaf-ts/core";
 import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";
 import { TestModel } from "./TestModel";
-import { Repository } from "@decaf-ts/core";
 import { RestService } from "../../src";
 import { IRepository } from "@decaf-ts/db-decorators";
 import { Model } from "@decaf-ts/decorator-validation";
