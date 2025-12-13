@@ -2,7 +2,7 @@ import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";
-import { Context } from "@decaf-ts/db-decorators";
+import { Context } from "@decaf-ts/core";
 import { Logging } from "@decaf-ts/logging";
 
 const cfg: HttpConfig = {

@@ -3,7 +3,10 @@ import {
   AuthorizationError,
   Condition,
   ConnectionError,
+  Paginator,
+  Context,
   ContextualArgs,
+  FlagsOf,
   ForbiddenError,
   MaybeContextualArg,
   MigrationError,
@@ -16,13 +19,12 @@ import {
   Sequence,
   SequenceOptions,
   UnsupportedError,
+  PreparedStatement,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
   BaseError,
   ConflictError,
-  Context,
-  FlagsOf,
   InternalError,
   NotFoundError,
   OperationKeys,
@@ -30,7 +32,7 @@ import {
   SerializationError,
   ValidationError,
 } from "@decaf-ts/db-decorators";
-import { HttpConfig, HttpFlags, HttpQuery } from "./types";
+import { HttpConfig, HttpFlags } from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
 import {
   apply,
@@ -44,6 +46,7 @@ import { Statement } from "@decaf-ts/core";
 import { prepared, QueryOptions } from "@decaf-ts/core";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
+import { HttpPaginator } from "./HttpPaginator";
 
 /**
  * @description Abstract HTTP adapter for REST API interactions
@@ -81,7 +84,7 @@ export abstract class HttpAdapter<
   CONF extends HttpConfig,
   CON,
   REQ,
-  Q extends HttpQuery = HttpQuery,
+  Q extends PreparedStatement<any> = PreparedStatement<any>,
   C extends Context<HttpFlags> = Context<HttpFlags>,
 > extends Adapter<CONF, CON, Q, C> {
   protected constructor(config: CONF, flavour: string, alias?: string) {
@@ -90,26 +93,23 @@ export abstract class HttpAdapter<
 
   /**
    * @description Generates operation flags with HTTP headers
-   * @summary Extends the base flags method to include HTTP-specific headers for operations.
-   * This method adds an empty headers object to the flags returned by the parent class.
-   * @template F - The Repository Flags type
+   * @summary Extends the base flags method to ensure HTTP headers exist on the flags payload.
    * @template M - The model type
-   * @param {OperationKeys.CREATE|OperationKeys.READ|OperationKeys.UPDATE|OperationKeys.DELETE} operation - The operation type
-   * @param {Constructor<M>} model - The model constructor
-   * @param {Partial<F>} overrides - Optional flag overrides
-   * @return {F} The flags object with headers
+   * @param {OperationKeys|string} operation - The type of operation being performed
+   * @param {Constructor<M>|Constructor<M>[]} model - The target model constructor(s)
+   * @param {Partial<FlagsOf<C>>} overrides - Optional flag overrides
+   * @param {...any[]} args - Additional arguments forwarded to the base implementation
+   * @return {Promise<FlagsOf<C>>} The flags object with headers
    */
-  override async flags<M extends Model>(
-    operation:
-      | OperationKeys.CREATE
-      | OperationKeys.READ
-      | OperationKeys.UPDATE
-      | OperationKeys.DELETE,
-    model: Constructor<M>,
-    overrides: Partial<FlagsOf<C>>
-  ) {
-    return Object.assign(await super.flags<M>(operation, model, overrides), {
-      headers: {},
+  protected override async flags<M extends Model>(
+    operation: OperationKeys | string,
+    model: Constructor<M> | Constructor<M>[],
+    overrides: Partial<FlagsOf<C>>,
+    ...args: any[]
+  ): Promise<FlagsOf<C>> {
+    const flags = await super.flags(operation, model, overrides, ...args);
+    return Object.assign({}, flags, {
+      headers: flags.headers ?? {},
     });
   }
 
@@ -422,6 +422,19 @@ export abstract class HttpAdapter<
     any
   > {
     return new HttpStatement(this);
+  }
+
+  override Paginator<M extends Model>(
+    query: Q,
+    size: number,
+    clazz: Constructor<M>
+  ): Paginator<M, M, Q> {
+    return new HttpPaginator<M, Q, HttpAdapter<CONF, CON, REQ, Q, C>>(
+      this,
+      query,
+      size,
+      clazz
+    );
   }
 
   /**

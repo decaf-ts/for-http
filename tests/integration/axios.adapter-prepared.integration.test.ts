@@ -121,6 +121,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       .execute(ctx);
 
     expect(mock).toHaveBeenCalledWith({
+      headers: expect.any(Object),
       method: "GET",
       url: expect.stringContaining(
         `/${table}/${PersistenceKeys.STATEMENT}/findByNameAndIdSelectIdOrderByIdAsc/test/1?limit=10&skip=5`

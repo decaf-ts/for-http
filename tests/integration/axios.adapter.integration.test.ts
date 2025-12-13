@@ -1,6 +1,6 @@
 import { AxiosHttpAdapter } from "../../src/axios/axios";
 import type { HttpConfig } from "../../src/types";
-import { Context } from "@decaf-ts/db-decorators";
+import { Context } from "@decaf-ts/core";
 import { Logging } from "@decaf-ts/logging";
 
 // Subclass to override client with a minimal implementation

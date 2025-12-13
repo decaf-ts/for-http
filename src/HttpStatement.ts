@@ -1,10 +1,8 @@
 import {
   Condition,
-  ContextOf,
   GroupOperator,
-  MaybeContextualArg,
   Operator,
-  Paginator,
+  PreparedStatement,
   QueryClause,
   QueryError,
   Statement,
@@ -12,27 +10,20 @@ import {
 import { Model } from "@decaf-ts/decorator-validation";
 import { HttpAdapter } from "./adapter";
 import { toCamelCase } from "@decaf-ts/logging";
-import { HttpQuery } from "./types";
-import { HttpPaginator } from "./HttpPaginator";
-import { InternalError } from "@decaf-ts/db-decorators";
+
+type HttpAdapterQuery<T extends HttpAdapter<any, any, any, any, any>> =
+  T extends HttpAdapter<any, any, any, infer Q, any> ? Q : never;
 
 export class HttpStatement<
   M extends Model,
   A extends HttpAdapter<any, any, any, any, any>,
   R,
-> extends Statement<
-  M,
-  A,
-  R,
-  A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never
-> {
+> extends Statement<M, A, R, HttpAdapterQuery<A>> {
   constructor(adapter: A) {
     super(adapter);
   }
 
-  protected build(): A extends HttpAdapter<any, any, any, infer Q, any>
-    ? Q
-    : never {
+  protected build(): HttpAdapterQuery<A> {
     const method: string[] = [QueryClause.FIND_BY];
     const args: (string | number)[] = [];
     const params: Record<"limit" | "skip", any> = {} as any;
@@ -61,41 +52,15 @@ export class HttpStatement<
       method: toCamelCase(method.join(" ")),
       args: args,
       params: Object.keys(params).length ? params : undefined,
-    } as A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never;
+    } as HttpAdapterQuery<A>;
   }
 
-  async paginate(
-    size: number = 10,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<
-    Paginator<
-      M,
-      R,
-      A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never
-    >
-  > {
-    try {
-      const query = this.build();
-      return new HttpPaginator<M, A>(
-        this.adapter as A,
-        query,
-        size,
-        this.fromSelector
-      ) as any;
-    } catch (e: any) {
-      throw new InternalError(e);
-    }
-  }
-
-  protected parseCondition(
-    condition: Condition<M>
-  ): A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never {
+  protected parseCondition(condition: Condition<M>): HttpAdapterQuery<A> {
     // @ts-expect-error accessing protected properties
     // eslint-disable-next-line prefer-const
     let { attr1, operator, comparison } = condition;
 
-    const result: HttpQuery = {} as any;
+    const result: PreparedStatement<any> = {} as any;
     switch (operator) {
       case GroupOperator.AND:
       case GroupOperator.OR: {
@@ -151,8 +116,6 @@ export class HttpStatement<
         throw new QueryError(`Unsupported operator ${operator}`);
     }
 
-    return result as A extends HttpAdapter<any, any, any, infer Q, any>
-      ? Q
-      : never;
+    return result as HttpAdapterQuery<A>;
   }
 }

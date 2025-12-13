@@ -1,8 +1,9 @@
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
-import { FlagsOf } from "@decaf-ts/core";
+import { ContextOf, FlagsOf } from "@decaf-ts/core";
 import { HttpAdapter } from "./adapter";
 import { RestRepository } from "./RestRepository";
+import type { FlagsOf as ContextualFlagsOf } from "@decaf-ts/db-decorators";
 
 /**
  * @description Service class for REST API operations
@@ -57,10 +58,14 @@ export class RestService<
   A extends HttpAdapter<any, any, any, any, any>,
   Q = A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never,
 > extends RestRepository<M, A, Q> {
-  protected override _overrides: Partial<FlagsOf<A>> = {
+  protected override _overrides = {
     ignoreValidation: true,
     ignoreHandlers: true,
-  } as Partial<FlagsOf<A>>;
+    allowRawStatements: false,
+    squashSimpleQueries: true,
+    allowComplexStatements: true,
+  } as Partial<FlagsOf<ContextOf<A>>> &
+    Partial<ContextualFlagsOf<ContextOf<A>>>;
 
   /**
    * @description Initializes a new RestService instance

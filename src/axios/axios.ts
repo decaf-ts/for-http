@@ -1,12 +1,14 @@
 import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
-import { HttpConfig, HttpQuery } from "../types";
+import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import { BaseError, Context, PrimaryKeyType } from "@decaf-ts/db-decorators";
+import { BaseError, PrimaryKeyType } from "@decaf-ts/db-decorators";
 import {
+  Context,
   ContextualArgs,
   MaybeContextualArg,
   PersistenceKeys,
+  PreparedStatement,
 } from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
 import { Model } from "@decaf-ts/decorator-validation";
@@ -63,7 +65,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
   HttpConfig,
   Axios,
   AxiosRequestConfig,
-  HttpQuery,
+  PreparedStatement<any>,
   Context<AxiosFlags>
 > {
   constructor(config: HttpConfig, alias?: string) {
@@ -76,17 +78,17 @@ export class AxiosHttpAdapter extends HttpAdapter<
     } as AxiosRequestConfig);
   }
 
-  override toRequest(query: HttpQuery): AxiosRequestConfig;
+  override toRequest(query: PreparedStatement<any>): AxiosRequestConfig;
   override toRequest(ctx: Context<AxiosFlags>): AxiosRequestConfig;
   override toRequest(
-    query: HttpQuery,
+    query: PreparedStatement<any>,
     ctx: Context<AxiosFlags>
   ): AxiosRequestConfig;
   override toRequest(
-    ctxOrQuery: Context<AxiosFlags> | HttpQuery,
+    ctxOrQuery: Context<AxiosFlags> | PreparedStatement<any>,
     ctx?: Context<AxiosFlags>
   ): AxiosRequestConfig {
-    let query: HttpQuery | undefined;
+    let query: PreparedStatement<any> | undefined;
     let context: Context<AxiosFlags> | undefined;
 
     if (ctxOrQuery instanceof Context) {
@@ -110,7 +112,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       req.method = "GET";
       req.url = this.url(
         query.class,
-        [PersistenceKeys.STATEMENT, query.method, ...query.args],
+        [PersistenceKeys.STATEMENT, query.method, ...(query.args || [])],
         query.params as any
       );
     }

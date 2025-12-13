@@ -1,15 +1,19 @@
 import {
+  Context,
   ContextOf,
+  FlagsOf,
   MaybeContextualArg,
   OrderDirection,
   Paginator,
+  PreparedStatement,
   Repository,
 } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import { Context } from "@decaf-ts/db-decorators";
-import { HttpQuery } from "./types";
+import { PreparedStatementKeys } from "../../core/src/index";
+import type { FlagsOf as ContextualFlagsOf } from "@decaf-ts/db-decorators/lib/esm/interfaces/Contextual";
+import { HttpFlags } from "./types";
 
 /**
  * @description Repository for REST API interactions
@@ -45,6 +49,12 @@ export class RestRepository<
   A extends HttpAdapter<any, any, any, any, any>,
   Q = A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never,
 > extends Repository<M, A> {
+  protected override _overrides = {
+    allowRawStatements: false,
+    squashSimpleQueries: true,
+    allowComplexStatements: true,
+  } as any;
+
   constructor(adapter: A, clazz?: Constructor<M>) {
     super(adapter, clazz);
   }
@@ -116,13 +126,37 @@ export class RestRepository<
     )) as any;
   }
 
-  override async findOneBy(
+  override async findBy(
     key: keyof M,
     value: any,
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<M[]> {
     const contextArgs = await Context.args<M, ContextOf<A>>(
-      "findOneBy",
+      PreparedStatementKeys.FIND_BY,
+      this.class,
+      args,
+      this.adapter,
+      this._overrides || {}
+    );
+    const { log, ctxArgs } = this.logCtx(contextArgs.args, this.findBy);
+    log.verbose(
+      `finding all ${Model.tableName(this.class)} with ${key as string} ${value}`
+    );
+    return (await this.statement(
+      this.findBy.name,
+      key,
+      value,
+      ...ctxArgs
+    )) as any;
+  }
+
+  override async findOneBy(
+    key: keyof M,
+    value: any,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    const contextArgs = await Context.args<M, ContextOf<A>>(
+      PreparedStatementKeys.FIND_ONE_BY,
       this.class,
       args,
       this.adapter,
@@ -130,7 +164,7 @@ export class RestRepository<
     );
     const { log, ctxArgs } = this.logCtx(contextArgs.args, this.findOneBy);
     log.verbose(
-      `finding ${Model.tableName(this.class)} with ${key as string} ${value}`
+      `finding One ${Model.tableName(this.class)} with ${key as string} ${value}`
     );
     return (await this.statement(
       this.findOneBy.name,
@@ -152,11 +186,11 @@ export class RestRepository<
       this._overrides || {}
     );
     const { log, ctxArgs, ctx } = this.logCtx(contextArgs.args, this.statement);
-    const query: HttpQuery = {
+    const query: PreparedStatement<any> = {
       class: this.class,
       args: args,
       method: name,
-    };
+    } as PreparedStatement<any>;
     const req = this.adapter.toRequest(query, ctx);
     log.verbose(`Executing prepared statement ${name}`);
     return this.request(req, ...ctxArgs);

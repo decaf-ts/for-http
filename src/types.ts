@@ -1,5 +1,5 @@
-import { RepositoryFlags } from "@decaf-ts/db-decorators";
-import { ModelConstructor } from "@decaf-ts/decorator-validation";
+import { AdapterFlags, PreparedStatement } from "@decaf-ts/core";
+import { Model } from "@decaf-ts/decorator-validation";
 
 /**
  * @description HTTP configuration type
@@ -21,13 +21,6 @@ export type HttpConfig = {
  * @property {Record<string, string>} [headers] - Optional HTTP headers to include with requests
  * @memberOf module:for-http
  */
-export interface HttpFlags extends RepositoryFlags {
+export interface HttpFlags extends AdapterFlags {
   headers?: Record<string, string>;
 }
-
-export type HttpQuery = {
-  class: ModelConstructor<any> | string;
-  method: string;
-  args: any[];
-  params?: Record<"limit" | "skip", number>;
-};

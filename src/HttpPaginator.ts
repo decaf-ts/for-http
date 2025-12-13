@@ -1,21 +1,21 @@
-import { OrderDirection, Paginator, QueryClause } from "@decaf-ts/core";
+import {
+  Context,
+  Paginator,
+  PreparedStatement,
+  QueryError,
+} from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
-import { HttpQuery } from "./types";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import { Context, OperationKeys } from "@decaf-ts/db-decorators";
-import { toCamelCase, toPascalCase } from "@decaf-ts/logging";
+import { OperationKeys } from "@decaf-ts/db-decorators";
+import { OrderDirection, PreparedStatementKeys } from "../../core/src/index";
 
 export class HttpPaginator<
   M extends Model,
-  A extends HttpAdapter<any, any, any, HttpQuery, any>,
-> extends Paginator<M, M, HttpQuery> {
-  constructor(
-    adapter: A,
-    query: HttpQuery,
-    size: number,
-    clazz: Constructor<M>
-  ) {
+  Q extends PreparedStatement<M>,
+  A extends HttpAdapter<any, any, any, Q, any>,
+> extends Paginator<M, M, Q> {
+  constructor(adapter: A, query: Q, size: number, clazz: Constructor<M>) {
     super(adapter, query, size, clazz);
   }
 
@@ -31,7 +31,7 @@ export class HttpPaginator<
       args: [...this.statement.args],
       params: { ...this.statement.params },
     });
-    if (!this.statement.method.includes("pageBy"))
+    if (!this.statement.method.startsWith(PreparedStatementKeys.PAGE_BY))
       statement = this.prepare(statement) as any;
     statement.args.push(page);
     page = this.validatePage(page);
@@ -44,61 +44,24 @@ export class HttpPaginator<
     return results;
   }
 
-  protected prepare(rawStatement: HttpQuery): HttpQuery {
-    // only support main attr for now before implementing pageBy
-    let attrs = rawStatement.method.split(
-      new RegExp(
-        `(${[QueryClause.FIND_BY, QueryClause.SELECT, QueryClause.ORDER_BY, QueryClause.GROUP_BY, QueryClause.AND, QueryClause.OR].join("|")})`,
-        "i"
-      )
-    );
-
-    attrs = attrs
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .filter(
-        (s) =>
-          ![
-            QueryClause.FIND_BY,
-            QueryClause.SELECT,
-            QueryClause.ORDER_BY,
-            QueryClause.GROUP_BY,
-            toPascalCase(OrderDirection.ASC),
-            toPascalCase(OrderDirection.DSC),
-          ].find((c) => s.includes(c))
-      );
-
-    const fullOrderBy = rawStatement.method.split(QueryClause.ORDER_BY);
-    let orderBy: any;
-    if (fullOrderBy.length) {
-      orderBy = fullOrderBy[1]
-        .split(
-          new RegExp(
-            `${[toPascalCase(OrderDirection.ASC), toPascalCase(OrderDirection.DSC), QueryClause.GROUP_BY + ".*", QueryClause.THEN_BY].join("|")}`,
-            "i"
-          )
-        )
-        .map((s) => s.trim())
-        .filter(Boolean);
-      orderBy = [
-        orderBy[0] as any,
-        fullOrderBy[1].includes(toPascalCase(OrderDirection.ASC))
-          ? OrderDirection.ASC
+  protected prepare(rawStatement: Q): Q {
+    const match = new RegExp(
+      `^(${PreparedStatementKeys.FIND_BY}|${PreparedStatementKeys.LIST_BY})`,
+      "gi"
+    ).exec(rawStatement.method);
+    if (!match)
+      throw new QueryError(`Can't prepare statement ${rawStatement.method}`);
+    return Object.assign({}, rawStatement, {
+      method: rawStatement.method.replace(
+        match[1],
+        PreparedStatementKeys.PAGE_BY
+      ),
+      args: [...rawStatement.args, this.size],
+      params: {
+        direction: rawStatement.params
+          ? rawStatement.params.direction
           : OrderDirection.DSC,
-      ];
-    }
-
-    if (attrs.length === 1 && attrs[0] === orderBy[0]) {
-      const attr = attrs[0];
-      return Object.assign({}, rawStatement, {
-        method: "pageBy",
-        args: [toCamelCase(attr), orderBy[1], this.size],
-      });
-    } else {
-      return Object.assign({}, rawStatement, {
-        method: rawStatement.method.replace(QueryClause.FIND_BY, "pageBy"),
-        args: [...rawStatement.args, this.size],
-      });
-    }
+      },
+    });
   }
 }
