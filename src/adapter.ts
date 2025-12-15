@@ -47,6 +47,7 @@ import { prepared, QueryOptions } from "@decaf-ts/core";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
+import type { AdapterFlags } from "../../core/src/index";
 
 /**
  * @description Abstract HTTP adapter for REST API interactions
@@ -416,12 +417,10 @@ export abstract class HttpAdapter<
    * @return {Statement<Q, M, any>} A statement object for building queries
    * @throws {UnsupportedError} Always throws as this method is not supported by default
    */
-  override Statement<M extends Model>(): Statement<
-    M,
-    Adapter<CONF, CON, Q, C>,
-    any
-  > {
-    return new HttpStatement(this);
+  override Statement<M extends Model>(
+    overrides?: Partial<AdapterFlags>
+  ): Statement<M, Adapter<CONF, CON, Q, C>, any> {
+    return new HttpStatement(this, overrides);
   }
 
   override Paginator<M extends Model>(

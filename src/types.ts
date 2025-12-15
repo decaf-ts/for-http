@@ -1,5 +1,4 @@
-import { AdapterFlags, PreparedStatement } from "@decaf-ts/core";
-import { Model } from "@decaf-ts/decorator-validation";
+import { AdapterFlags } from "@decaf-ts/core";
 
 /**
  * @description HTTP configuration type

@@ -87,25 +87,24 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(mock).toHaveBeenLastCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/listBy/id/asc`
+        `/${table}/${PersistenceKeys.STATEMENT}/listBy/id?direction=asc`
       ),
     });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const page = await repo.paginateBy("id", "asc" as any, 10, ctx);
 
+    const res = await page.page();
+
     expect(mock).toHaveBeenLastCalledWith({
+      headers: expect.any(Object),
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/id/asc/10`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/id/1?direction=asc&limit=10`
       ),
     });
   });
 
   it("handles queries via prepared statements", async () => {
-    const ctx = new Context().accumulate({
-      logger: Logging.for(expect.getState().currentTestName),
-    });
-
     const repo = Repository.forModel(TestModel);
     expect(repo).toBeInstanceOf(RestService);
 
@@ -118,13 +117,13 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       .orderBy(["id", OrderDirection.ASC])
       .limit(10)
       .offset(5)
-      .execute(ctx);
+      .execute();
 
     expect(mock).toHaveBeenCalledWith({
-      headers: expect.any(Object),
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/findByNameAndIdSelectIdOrderByIdAsc/test/1?limit=10&skip=5`
+        `/${table}/${PersistenceKeys.STATEMENT}/findByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10&skip=5`
       ),
     });
   });
@@ -151,7 +150,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(mock).toHaveBeenCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/pageBy/name/asc/10/1`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test/1?direction=asc&limit=10`
       ),
     });
   });
@@ -177,7 +176,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(mock).toHaveBeenCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/pageByNameAndIdSelectIdOrderByIdAsc/test/1/10/1`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1/1?direction=asc&limit=10`
       ),
     });
   });

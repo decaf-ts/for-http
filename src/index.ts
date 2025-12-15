@@ -1,4 +1,5 @@
 import "@decaf-ts/core";
+import { Metadata } from "@decaf-ts/decoration";
 
 /**
  * @description HTTP client module for REST API interactions
@@ -10,6 +11,8 @@ import "@decaf-ts/core";
  */
 export * from "./axios";
 export * from "./adapter";
+export * from "./HttpPaginator";
+export * from "./HttpStatement";
 export * from "./RestRepository";
 export * from "./RestService";
 export * from "./types";
@@ -20,3 +23,7 @@ export * from "./types";
  * @const VERSION
  */
 export const VERSION = "##VERSION##";
+
+export const PACKAGE_NAME = "##PACKAGE##";
+
+Metadata.registerLibrary(PACKAGE_NAME, VERSION);

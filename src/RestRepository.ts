@@ -1,7 +1,6 @@
 import {
   Context,
   ContextOf,
-  FlagsOf,
   MaybeContextualArg,
   OrderDirection,
   Paginator,
@@ -11,9 +10,7 @@ import {
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import { PreparedStatementKeys } from "../../core/src/index";
-import type { FlagsOf as ContextualFlagsOf } from "@decaf-ts/db-decorators/lib/esm/interfaces/Contextual";
-import { HttpFlags } from "./types";
+import { PreparedStatementKeys } from "@decaf-ts/core";
 
 /**
  * @description Repository for REST API interactions
@@ -49,11 +46,11 @@ export class RestRepository<
   A extends HttpAdapter<any, any, any, any, any>,
   Q = A extends HttpAdapter<any, any, any, infer Q, any> ? Q : never,
 > extends Repository<M, A> {
-  protected override _overrides = {
+  protected override _overrides = Object.assign({}, super["_overrides"], {
     allowRawStatements: false,
-    squashSimpleQueries: true,
-    allowComplexStatements: true,
-  } as any;
+    forcePrepareSimpleQueries: true,
+    forcePrepareComplexQueries: true,
+  });
 
   constructor(adapter: A, clazz?: Constructor<M>) {
     super(adapter, clazz);
@@ -81,9 +78,9 @@ export class RestRepository<
     order: OrderDirection,
     size: number,
     ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<Paginator<M, M[], any>> {
+  ) {
     const contextArgs = await Context.args<M, ContextOf<A>>(
-      "paginateBy",
+      PreparedStatementKeys.PAGE_BY,
       this.class,
       args,
       this.adapter,
@@ -93,13 +90,9 @@ export class RestRepository<
     log.verbose(
       `paginating ${Model.tableName(this.class)} with page size ${size}`
     );
-    return (await this.statement(
-      this.paginateBy.name,
-      key,
-      order,
-      size,
-      ...ctxArgs
-    )) as any;
+    return this.select()
+      .orderBy([key, order])
+      .paginate(size, ...ctxArgs);
   }
 
   override async listBy(
@@ -121,7 +114,7 @@ export class RestRepository<
     return (await this.statement(
       this.listBy.name,
       key,
-      order,
+      { direction: order },
       ...ctxArgs
     )) as any;
   }
@@ -146,6 +139,7 @@ export class RestRepository<
       this.findBy.name,
       key,
       value,
+      {},
       ...ctxArgs
     )) as any;
   }
@@ -170,6 +164,7 @@ export class RestRepository<
       this.findOneBy.name,
       key,
       value,
+      {},
       ...ctxArgs
     )) as any;
   }
@@ -186,10 +181,12 @@ export class RestRepository<
       this._overrides || {}
     );
     const { log, ctxArgs, ctx } = this.logCtx(contextArgs.args, this.statement);
+    const params = args.pop();
     const query: PreparedStatement<any> = {
       class: this.class,
       args: args,
       method: name,
+      params: params,
     } as PreparedStatement<any>;
     const req = this.adapter.toRequest(query, ctx);
     log.verbose(`Executing prepared statement ${name}`);
