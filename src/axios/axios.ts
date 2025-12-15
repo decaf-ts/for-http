@@ -13,7 +13,6 @@ import {
 import { AxiosFlavour } from "./constants";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
-import { toKebabCase } from "@decaf-ts/logging";
 
 /**
  * @description Axios implementation of the HTTP adapter

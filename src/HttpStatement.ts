@@ -1,7 +1,7 @@
 import { Condition, Statement, UnsupportedError } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { HttpAdapter } from "./adapter";
-import type { AdapterFlags } from "../../core/src/index";
+import type { AdapterFlags } from "@decaf-ts/core";
 
 type HttpAdapterQuery<T extends HttpAdapter<any, any, any, any, any>> =
   T extends HttpAdapter<any, any, any, infer Q, any> ? Q : never;

@@ -47,7 +47,7 @@ import { prepared, QueryOptions } from "@decaf-ts/core";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
-import type { AdapterFlags } from "../../core/src/index";
+import type { AdapterFlags } from "@decaf-ts/core";
 
 /**
  * @description Abstract HTTP adapter for REST API interactions
@@ -97,7 +97,7 @@ export abstract class HttpAdapter<
    * @summary Extends the base flags method to ensure HTTP headers exist on the flags payload.
    * @template M - The model type
    * @param {OperationKeys|string} operation - The type of operation being performed
-   * @param {Constructor<M>|Constructor<M>[]} model - The target model constructor(s)
+   * @param {Constructor | Constructor[]} model - The target model constructor(s)
    * @param {Partial<FlagsOf<C>>} overrides - Optional flag overrides
    * @param {...any[]} args - Additional arguments forwarded to the base implementation
    * @return {Promise<FlagsOf<C>>} The flags object with headers

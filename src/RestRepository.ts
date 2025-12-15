@@ -3,7 +3,6 @@ import {
   ContextOf,
   MaybeContextualArg,
   OrderDirection,
-  Paginator,
   PreparedStatement,
   Repository,
 } from "@decaf-ts/core";
