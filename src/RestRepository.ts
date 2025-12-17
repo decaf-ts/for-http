@@ -3,6 +3,7 @@ import {
   ContextOf,
   MaybeContextualArg,
   OrderDirection,
+  PersistenceKeys,
   PreparedStatement,
   Repository,
 } from "@decaf-ts/core";
@@ -173,7 +174,7 @@ export class RestRepository<
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<any> {
     const contextArgs = await Context.args<M, ContextOf<A>>(
-      "statement",
+      PersistenceKeys.STATEMENT,
       this.class,
       args,
       this.adapter,
