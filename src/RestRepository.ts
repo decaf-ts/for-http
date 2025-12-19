@@ -5,19 +5,19 @@ import {
   OrderDirection,
   PersistenceKeys,
   PreparedStatement,
+  PreparedStatementKeys,
   Repository,
 } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import { PreparedStatementKeys } from "@decaf-ts/core";
 import {
   BulkCrudOperationKeys,
+  enforceDBDecorators,
   OperationKeys,
   PrimaryKeyType,
-  ValidationError,
   reduceErrorsToPrint,
-  enforceDBDecorators,
+  ValidationError,
 } from "@decaf-ts/db-decorators";
 
 /**
@@ -79,6 +79,46 @@ export class RestRepository<
     queryParams?: Record<string, string | number>
   ): string {
     return this.adapter.url(tableName, pathParams as any, queryParams as any);
+  }
+
+  override async create(
+    model: M,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    return this.adapter.parseResponse(
+      OperationKeys.CREATE,
+      await super.create(model, ...args)
+    );
+  }
+
+  override async read(
+    id: PrimaryKeyType,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    return this.adapter.parseResponse(
+      OperationKeys.READ,
+      await super.read(id, ...args)
+    );
+  }
+
+  override async update(
+    model: M,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    return this.adapter.parseResponse(
+      OperationKeys.UPDATE,
+      await super.update(model, ...args)
+    );
+  }
+
+  override async delete(
+    id: PrimaryKeyType,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M> {
+    return this.adapter.parseResponse(
+      OperationKeys.DELETE,
+      await super.delete(id, ...args)
+    );
   }
 
   protected override async createAllPrefix(

@@ -84,12 +84,8 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     await expect(adapter.create("users", 1, {}, ctx)).rejects.toThrow(
       InternalError
     );
-    await expect(adapter.read("users", 1, ctx)).rejects.toThrow(InternalError);
-    await expect(adapter.update("users", 1, {}, ctx)).rejects.toThrow(
-      InternalError
-    );
-    await expect(adapter.delete("users", 1, ctx)).rejects.toThrow(
-      InternalError
-    );
+    await expect(adapter.read("users", 1, ctx)).rejects.toThrow(boom);
+    await expect(adapter.update("users", 1, {}, ctx)).rejects.toThrow(boom);
+    await expect(adapter.delete("users", 1, ctx)).rejects.toThrow(boom);
   });
 });

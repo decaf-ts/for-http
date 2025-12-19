@@ -2,12 +2,7 @@ import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import {
-  BaseError,
-  BulkCrudOperationKeys,
-  OperationKeys,
-  PrimaryKeyType,
-} from "@decaf-ts/db-decorators";
+import { BaseError, PrimaryKeyType } from "@decaf-ts/db-decorators";
 import {
   Context,
   ContextualArgs,
@@ -169,10 +164,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.parseResponse(
-        OperationKeys.CREATE,
-        await this.client.post(url, model, cfg)
-      );
+      return await this.client.post(url, model, cfg);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -191,10 +183,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.parseResponse(
-        BulkCrudOperationKeys.CREATE_ALL,
-        await this.client.post(url, model, cfg)
-      );
+      return this.client.post(url, model, cfg);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -221,7 +210,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       );
       const cfg = this.toRequest(ctx);
       log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.parseResponse(OperationKeys.READ, await this.client.get(url));
+      return this.client.get(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -236,10 +225,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       const url = this.url(tableName, ["bulk"], { ids: ids } as any);
       const cfg = this.toRequest(ctx);
       log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.parseResponse(
-        BulkCrudOperationKeys.READ_ALL,
-        await this.client.get(url)
-      );
+      return this.client.get(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -270,10 +256,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.parseResponse(
-        OperationKeys.UPDATE,
-        await this.client.put(url, model)
-      );
+      return this.client.put(url, model);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -292,10 +275,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.parseResponse(
-        BulkCrudOperationKeys.UPDATE_ALL,
-        await this.client.put(url, model)
-      );
+      return this.client.put(url, model);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -322,10 +302,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       );
       const cfg = this.toRequest(ctx);
       log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.parseResponse(
-        OperationKeys.DELETE,
-        await this.client.delete(url)
-      );
+      return this.client.delete(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -341,10 +318,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       const url = this.url(tableName, ["bulk"], { ids: ids } as any);
       const cfg = this.toRequest(ctx);
       log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.parseResponse(
-        BulkCrudOperationKeys.DELETE_ALL,
-        await this.client.delete(url)
-      );
+      return this.client.delete(url);
     } catch (e: any) {
       throw this.parseError(e);
     }
