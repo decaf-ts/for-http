@@ -11,6 +11,7 @@ import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
 import { PreparedStatementKeys } from "@decaf-ts/core";
+import { BulkCrudOperationKeys, PrimaryKeyType } from "@decaf-ts/db-decorators";
 
 /**
  * @description Repository for REST API interactions
@@ -71,6 +72,46 @@ export class RestRepository<
     queryParams?: Record<string, string | number>
   ): string {
     return this.adapter.url(tableName, pathParams as any, queryParams as any);
+  }
+
+  override async createAll(
+    models: M[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    return this.adapter.parseResponse(
+      BulkCrudOperationKeys.CREATE_ALL,
+      await super.createAll(models, ...args)
+    );
+  }
+
+  override async readAll(
+    keys: PrimaryKeyType[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    return this.adapter.parseResponse(
+      BulkCrudOperationKeys.READ_ALL,
+      await super.readAll(keys, ...args)
+    );
+  }
+
+  override async updateAll(
+    models: M[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    return this.adapter.parseResponse(
+      BulkCrudOperationKeys.UPDATE_ALL,
+      await super.updateAll(models, ...args)
+    );
+  }
+
+  override async deleteAll(
+    keys: PrimaryKeyType[],
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    return this.adapter.parseResponse(
+      BulkCrudOperationKeys.DELETE_ALL,
+      await super.deleteAll(keys, ...args)
+    );
   }
 
   override async paginateBy(
@@ -190,7 +231,10 @@ export class RestRepository<
     } as PreparedStatement<any>;
     const req = this.adapter.toRequest(query, ctx);
     log.verbose(`Executing prepared statement ${name}`);
-    return this.request(req, ...ctxArgs);
+    return this.adapter.parseResponse(
+      name,
+      await this.request(req, ...ctxArgs)
+    );
   }
 
   async request<R>(

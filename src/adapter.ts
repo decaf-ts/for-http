@@ -48,6 +48,7 @@ import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
 import type { AdapterFlags } from "@decaf-ts/core";
+import { ResponseParser } from "./ResponseParser";
 
 /**
  * @description Abstract HTTP adapter for REST API interactions
@@ -89,7 +90,13 @@ export abstract class HttpAdapter<
   C extends Context<HttpFlags> = Context<HttpFlags>,
 > extends Adapter<CONF, CON, Q, C> {
   protected constructor(config: CONF, flavour: string, alias?: string) {
-    super(config, flavour, alias);
+    super(
+      Object.assign({}, config, {
+        responseParser: config.responseParser || new ResponseParser(),
+      }),
+      flavour,
+      alias
+    );
   }
 
   /**
@@ -305,6 +312,12 @@ export abstract class HttpAdapter<
     const composed = Model.composed(model, Model.pk(model));
     if (!composed) return [idStr];
     return idStr.split(composed.separator);
+  }
+
+  parseResponse(method: OperationKeys | string, res: any) {
+    if (!this.config.responseParser)
+      throw new InternalError(`No response parser configured`);
+    return this.config.responseParser.parse(method, res);
   }
 
   /**

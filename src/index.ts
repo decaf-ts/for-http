@@ -13,6 +13,7 @@ export * from "./axios";
 export * from "./adapter";
 export * from "./HttpPaginator";
 export * from "./HttpStatement";
+export * from "./ResponseParser";
 export * from "./RestRepository";
 export * from "./RestService";
 export * from "./types";
