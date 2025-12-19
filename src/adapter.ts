@@ -16,10 +16,8 @@ import {
   PreparedModel,
   QueryError,
   Repository,
-  Sequence,
-  SequenceOptions,
-  UnsupportedError,
   PreparedStatement,
+  UnsupportedError,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
@@ -42,8 +40,13 @@ import {
   Metadata,
 } from "@decaf-ts/decoration";
 import { RestService } from "./RestService";
-import { Statement } from "@decaf-ts/core";
-import { prepared, QueryOptions } from "@decaf-ts/core";
+import {
+  prepared,
+  QueryOptions,
+  Statement,
+  SequenceOptions,
+  Sequence,
+} from "@decaf-ts/core";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";

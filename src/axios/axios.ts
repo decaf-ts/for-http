@@ -4,6 +4,7 @@ import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
 import {
   BaseError,
+  BulkCrudOperationKeys,
   OperationKeys,
   PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
@@ -176,6 +177,29 @@ export class AxiosHttpAdapter extends HttpAdapter<
       throw this.parseError(e);
     }
   }
+
+  override async createAll<M extends Model>(
+    clazz: Constructor<M> | string,
+    id: PrimaryKeyType[],
+    model: Record<string, any>[],
+    ...args: ContextualArgs<Context<AxiosFlags>>
+  ): Promise<Record<string, any>[]> {
+    const { log, ctx } = this.logCtx(args, this.createAll);
+    try {
+      const url = this.url(clazz, ["bulk"]);
+      const cfg = this.toRequest(ctx);
+      log.debug(
+        `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
+      );
+      return this.parseResponse(
+        BulkCrudOperationKeys.CREATE_ALL,
+        await this.client.post(url, model, cfg)
+      );
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
+
   /**
    * @description Retrieves a resource by ID via HTTP GET
    * @summary Implementation of the abstract read method from HttpAdapter.
@@ -198,6 +222,24 @@ export class AxiosHttpAdapter extends HttpAdapter<
       const cfg = this.toRequest(ctx);
       log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
       return this.parseResponse(OperationKeys.READ, await this.client.get(url));
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
+  override async readAll<M extends Model>(
+    tableName: Constructor<M> | string,
+    ids: PrimaryKeyType[],
+    ...args: ContextualArgs<Context<AxiosFlags>>
+  ): Promise<Record<string, any>[]> {
+    const { log, ctx } = this.logCtx(args, this.readAll);
+    try {
+      const url = this.url(tableName, ["bulk"], { ids: ids } as any);
+      const cfg = this.toRequest(ctx);
+      log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
+      return this.parseResponse(
+        BulkCrudOperationKeys.READ_ALL,
+        await this.client.get(url)
+      );
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -237,6 +279,28 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
   }
 
+  override async updateAll<M extends Model>(
+    tableName: Constructor<M> | string,
+    ids: PrimaryKeyType[],
+    model: Record<string, any>[],
+    ...args: ContextualArgs<Context<AxiosFlags>>
+  ): Promise<Record<string, any>[]> {
+    const { log, ctx } = this.logCtx(args, this.updateAll);
+    try {
+      const url = this.url(tableName, ["bulk"]);
+      const cfg = this.toRequest(ctx);
+      log.debug(
+        `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
+      );
+      return this.parseResponse(
+        BulkCrudOperationKeys.UPDATE_ALL,
+        await this.client.put(url, model)
+      );
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
+
   /**
    * @description Deletes a resource by ID via HTTP DELETE
    * @summary Implementation of the abstract delete method from HttpAdapter.
@@ -260,6 +324,25 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
       return this.parseResponse(
         OperationKeys.DELETE,
+        await this.client.delete(url)
+      );
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
+
+  override async deleteAll<M extends Model>(
+    tableName: Constructor<M> | string,
+    ids: PrimaryKeyType[],
+    ...args: ContextualArgs<Context<AxiosFlags>>
+  ): Promise<Record<string, any>[]> {
+    const { log, ctx } = this.logCtx(args, this.delete);
+    try {
+      const url = this.url(tableName, ["bulk"], { ids: ids } as any);
+      const cfg = this.toRequest(ctx);
+      log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
+      return this.parseResponse(
+        BulkCrudOperationKeys.DELETE_ALL,
         await this.client.delete(url)
       );
     } catch (e: any) {
