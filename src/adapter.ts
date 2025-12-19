@@ -284,7 +284,10 @@ export abstract class HttpAdapter<
     );
     if (queryParams)
       Object.entries(queryParams).forEach(([key, value]) =>
-        url.searchParams.append(key, value.toString())
+        url.searchParams.append(
+          key,
+          Array.isArray(value) ? value.join(",") : value.toString()
+        )
       );
 
     // ensure spaces are encoded as %20 (not '+') to match expectations
