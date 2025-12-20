@@ -25,21 +25,23 @@ export class NestJSResponseParser extends ResponseParser<{
       throw HttpAdapter.parseError(response.status.toString());
 
     switch (method) {
-      case OperationKeys.CREATE:
-      case OperationKeys.READ:
-      case OperationKeys.UPDATE:
-      case OperationKeys.DELETE:
       case BulkCrudOperationKeys.CREATE_ALL:
       case BulkCrudOperationKeys.READ_ALL:
       case BulkCrudOperationKeys.UPDATE_ALL:
       case BulkCrudOperationKeys.DELETE_ALL:
       case PreparedStatementKeys.FIND_BY:
-      case PreparedStatementKeys.FIND_ONE_BY:
       case PreparedStatementKeys.LIST_BY:
       case PreparedStatementKeys.PAGE_BY:
+        return response.raw;
+      case OperationKeys.CREATE:
+      case OperationKeys.READ:
+      case OperationKeys.UPDATE:
+      case OperationKeys.DELETE:
+        return response.data;
+      case PreparedStatementKeys.FIND_ONE_BY:
       case "statement":
       default:
-        return response.data;
+        return response.raw;
     }
   }
 }
