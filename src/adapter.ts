@@ -328,8 +328,7 @@ export abstract class HttpAdapter<
         )
       );
 
-    // ensure spaces are encoded as %20 (not '+') to match expectations
-    return encodeURI(url.toString()).replace(/\+/g, "%20");
+    return encodeURI(url.toString());
   }
 
   abstract toRequest(query: Q): REQ;

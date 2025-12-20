@@ -81,9 +81,7 @@ describe("HttpAdapter base features", () => {
     expect(base).toBe("https://api.example.com/users");
 
     const withQuery = adapter.buildUrl("search", { q: "John Doe", page: 2 });
-    expect(withQuery).toBe(
-      "https://api.example.com/search?q=John%20Doe&page=2"
-    );
+    expect(withQuery).toBe("https://api.example.com/search?q=John+Doe&page=2");
   });
 
   test("parseError() should pass through errors as InternalError", () => {
