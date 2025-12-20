@@ -53,6 +53,26 @@ import { HttpPaginator } from "./HttpPaginator";
 import type { AdapterFlags } from "@decaf-ts/core";
 import { ResponseParser } from "./ResponseParser";
 
+export function suffixMethod(
+  obj: any,
+  before: (...args: any[]) => any,
+  suffix: (...args: any[]) => any,
+  beforeName?: string
+) {
+  const name = beforeName ? beforeName : before.name;
+  obj[name] = new Proxy(obj[name], {
+    apply: async (target, thisArg, argArray) => {
+      let results = target.call(thisArg, ...argArray);
+      if (results instanceof Promise) results = await results;
+
+      results = suffix.call(thisArg, results);
+
+      if (results instanceof Promise) results = await results;
+
+      return results;
+    },
+  });
+}
 /**
  * @description Abstract HTTP adapter for REST API interactions
  * @summary Provides a base implementation for HTTP adapters with methods for CRUD operations,
@@ -100,6 +120,24 @@ export abstract class HttpAdapter<
       flavour,
       alias
     );
+
+    [
+      this.create,
+      this.read,
+      this.update,
+      this.delete,
+      this.createAll,
+      this.readAll,
+      this.updateAll,
+      this.deleteAll,
+    ].forEach((method) => {
+      suffixMethod(
+        this,
+        method,
+        (res: any) => this.parseResponse(method.name, res),
+        method.name
+      );
+    });
   }
 
   /**

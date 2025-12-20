@@ -2,7 +2,11 @@ import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import { BaseError, PrimaryKeyType } from "@decaf-ts/db-decorators";
+import {
+  BaseError,
+  BulkCrudOperationKeys,
+  PrimaryKeyType,
+} from "@decaf-ts/db-decorators";
 import {
   Context,
   ContextualArgs,
@@ -183,7 +187,10 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.post(url, model, cfg);
+      return this.parseResponse(
+        BulkCrudOperationKeys.CREATE_ALL,
+        await this.client.post(url, model, cfg)
+      );
     } catch (e: any) {
       throw this.parseError(e);
     }

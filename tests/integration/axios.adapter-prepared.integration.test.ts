@@ -13,7 +13,7 @@ import {
   ModelArg,
   required,
 } from "@decaf-ts/decorator-validation";
-import { RestService } from "../../src/index";
+import { RestService } from "../../src/RestService";
 import { Logging, toKebabCase } from "@decaf-ts/logging";
 
 // Subclass to override client with a minimal implementation
