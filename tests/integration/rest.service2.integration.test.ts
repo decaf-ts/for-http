@@ -104,7 +104,7 @@ describe("RestService integration", () => {
     );
 
     function enc(url) {
-      return encodeURI(url.toString()).replace(/\+/g, "%20");
+      return url.toString();
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

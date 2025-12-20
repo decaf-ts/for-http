@@ -328,7 +328,7 @@ export abstract class HttpAdapter<
         )
       );
 
-    return encodeURI(url.toString());
+    return url.toString();
   }
 
   abstract toRequest(query: Q): REQ;
