@@ -89,7 +89,6 @@
     "@decaf-ts/decorator-validation": "latest",
     "@decaf-ts/injectable-decorators": "latest",
     "@decaf-ts/logging": "latest",
-    "@decaf-ts/reflection": "latest",
     "@decaf-ts/transactional-decorators": "latest",
     "axios": "^1.13.2"
   }
