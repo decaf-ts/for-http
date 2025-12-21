@@ -64,7 +64,7 @@ describe("Axios adapter", function () {
     // expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${tableName}`,
+      `${cfg.protocol}://${cfg.host}/${tableName}/id`,
       expect.objectContaining(record),
       {}
     );

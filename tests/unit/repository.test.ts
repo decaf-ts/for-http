@@ -85,14 +85,14 @@ describe("RestRepository", function () {
   it("creates", async function () {
     postMock.mockImplementation(
       async (url: string, data: Record<string, unknown>) => {
-        return Object.assign({}, data);
+        return { status: 200, body: Object.assign({}, data) };
       }
     );
     created = await repo.create(model);
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}`,
+      `${cfg.protocol}://${cfg.host}/${table}/1`,
       expect.objectContaining(created),
       { headers: expect.any(Object) }
     );
@@ -104,7 +104,7 @@ describe("RestRepository", function () {
   it("reads", async function () {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string) => {
-      return Object.assign({}, created);
+      return { status: 200, body: Object.assign({}, created) };
     });
     const read = await repo.read(model.id);
     expect(read).toBeDefined();
@@ -119,12 +119,12 @@ describe("RestRepository", function () {
   it("updates", async function () {
     putMock.mockImplementation(
       async (url: string, data: Record<string, unknown>) => {
-        return Object.assign({}, data);
+        return { status: 200, body: Object.assign({}, data) };
       }
     );
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string, id: string) => {
-      return Object.assign({}, created);
+      return { status: 200, body: Object.assign({}, created) };
     });
 
     const toUpdate = new OtherTestModel(
@@ -147,12 +147,13 @@ describe("RestRepository", function () {
   it("deletes", async function () {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     deleteMock.mockImplementation(async (url: string, id: string) => {
-      return Object.assign({}, updated);
+      return { status: 200, body: Object.assign({}, updated) };
     });
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getMock.mockImplementation(async (url: string, id: string) => {
-      return Object.assign({}, updated);
+      return { status: 200, body: Object.assign({}, updated) };
     });
+
     const deleted = await repo.delete(model.id);
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);

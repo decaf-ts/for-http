@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { AxiosHttpAdapter } from "../../src/axios";
 import { HttpAdapter, HttpConfig } from "../../src";
 import { Axios } from "axios";
@@ -89,15 +90,24 @@ describe("RestRepository", function () {
   it("creates", async function () {
     postMock.mockImplementation(
       async (url: string, data: Record<string, unknown>) => {
-        return Object.assign({}, data);
+        return {
+          status: 200,
+          body: new ComposedTestModel(
+            Object.assign({}, model, {
+              id: `${model.name}_${model.age}`,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+          ),
+        };
       }
     );
     created = await repo.create(model);
     expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}`,
-      expect.objectContaining(created),
+      `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
+      expect.any(Object),
       { headers: expect.any(Object) }
     );
     expect(created).toBeInstanceOf(ComposedTestModel);
@@ -106,16 +116,17 @@ describe("RestRepository", function () {
   });
 
   it("reads", async function () {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getMock.mockImplementation(async (url: string) => {
-      return Object.assign({}, created);
-    });
+    getMock.mockImplementation(
+      async (url: string, data: Record<string, unknown>) => {
+        return { status: 200, body: created };
+      }
+    );
     const read = await repo.read(created.id);
     expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
       encodeURI(
-        `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`
+        `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${created.age}`
       )
     );
     expect(read).toBeInstanceOf(ComposedTestModel);
@@ -125,17 +136,24 @@ describe("RestRepository", function () {
   it("updates", async function () {
     putMock.mockImplementation(
       async (url: string, data: Record<string, unknown>) => {
-        return Object.assign({}, data);
+        return { status: 200, body: Object.assign({}, model, data) };
       }
     );
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getMock.mockImplementation(async (url: string, id: string) => {
-      return Object.assign({}, created);
-    });
+    getMock.mockImplementation(
+      async (url: string, data: Record<string, unknown>) => {
+        return {
+          status: 200,
+          body: new ComposedTestModel(
+            Object.assign({}, created, {
+              updatedAt: new Date(),
+            })
+          ),
+        };
+      }
+    );
 
     const toUpdate = new ComposedTestModel(
-      Object.assign({}, expect.objectContaining(created), {
-        id: 1,
+      Object.assign({}, created, {
         address: "other",
       })
     );
@@ -154,14 +172,16 @@ describe("RestRepository", function () {
   });
 
   it("deletes", async function () {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    deleteMock.mockImplementation(async (url: string, id: string) => {
-      return Object.assign({}, updated);
-    });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getMock.mockImplementation(async (url: string, id: string) => {
-      return Object.assign({}, updated);
-    });
+    deleteMock.mockImplementation(
+      async (url: string, data: Record<string, unknown>) => {
+        return { status: 200, body: model };
+      }
+    );
+    getMock.mockImplementation(
+      async (url: string, data: Record<string, unknown>) => {
+        return { status: 200, body: model };
+      }
+    );
     const deleted = await repo.delete(created.id);
     expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);

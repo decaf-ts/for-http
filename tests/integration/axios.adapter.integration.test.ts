@@ -1,8 +1,9 @@
 import { AxiosHttpAdapter } from "../../src/axios/axios";
 import type { HttpConfig } from "../../src/types";
-import { Context } from "@decaf-ts/core";
+import { Context, pk } from "@decaf-ts/core";
 import { Logging } from "@decaf-ts/logging";
 import { InternalError } from "@decaf-ts/db-decorators";
+import { Model, ModelArg, required } from "@decaf-ts/decorator-validation";
 
 // Subclass to override client with a minimal implementation
 class TestAxiosAdapter extends AxiosHttpAdapter {
@@ -31,12 +32,35 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(res.ok).toBe(true);
   });
 
+  class Users extends Model {
+    @pk()
+    id!: number;
+
+    @required()
+    name!: string;
+    constructor(arg?: ModelArg<Users>) {
+      super(arg);
+    }
+  }
+
   test("CRUD methods call through to client and return value", async () => {
     const client = {
-      post: async (url: string, body: any) => ({ method: "post", url, body }),
-      get: async (url: string) => ({ method: "get", url }),
-      put: async (url: string, body: any) => ({ method: "put", url, body }),
-      delete: async (url: string) => ({ method: "delete", url }),
+      post: async (url: string, body: any) => ({
+        status: 200,
+        body: { method: "post", url, body },
+      }),
+      get: async (url: string) => ({
+        status: 200,
+        body: { method: "get", url },
+      }),
+      put: async (url: string, body: any) => ({
+        status: 200,
+        body: { method: "put", url, body },
+      }),
+      delete: async (url: string) => ({
+        status: 200,
+        body: { method: "delete", url },
+      }),
     };
     const adapter = new TestAxiosAdapter(
       config,
@@ -46,19 +70,24 @@ describe("AxiosHttpAdapter integration (no network)", () => {
 
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
-    const created = await adapter.create("users", 1, { name: "A" }, ctx);
+    const created = await adapter.create(
+      Users,
+      1,
+      new Users({ name: "A" }),
+      ctx
+    );
     expect(created.method).toBe("post");
-    expect(created.url).toBe("https://example.com/users");
+    expect(created.url).toBe("https://example.com/users/1");
 
-    const read = await adapter.read("users", 2, ctx);
+    const read = await adapter.read(Users, 2, ctx);
     expect(read.method).toBe("get");
     expect(read.url).toBe("https://example.com/users/2");
 
-    const updated = await adapter.update("users", 3, { name: "B" }, ctx);
+    const updated = await adapter.update(Users, 3, { name: "B" }, ctx);
     expect(updated.method).toBe("put");
     expect(updated.url).toBe("https://example.com/users/3");
 
-    const deleted = await adapter.delete("users", 4, ctx);
+    const deleted = await adapter.delete(Users, 4, ctx);
     expect(deleted.method).toBe("delete");
     expect(deleted.url).toBe("https://example.com/users/4");
   });
@@ -81,11 +110,11 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     };
     const adapter = new TestAxiosAdapter(config, failingClient);
     const ctx = new Context().accumulate({ logger: Logging.get() });
-    await expect(adapter.create("users", 1, {}, ctx)).rejects.toThrow(
+    await expect(adapter.create(Users, 1, new Users(), ctx)).rejects.toThrow(
       InternalError
     );
-    await expect(adapter.read("users", 1, ctx)).rejects.toThrow(boom);
-    await expect(adapter.update("users", 1, {}, ctx)).rejects.toThrow(boom);
-    await expect(adapter.delete("users", 1, ctx)).rejects.toThrow(boom);
+    await expect(adapter.read(Users, 1, ctx)).rejects.toThrow(boom);
+    await expect(adapter.update(Users, 1, {}, ctx)).rejects.toThrow(boom);
+    await expect(adapter.delete(Users, 1, ctx)).rejects.toThrow(boom);
   });
 });

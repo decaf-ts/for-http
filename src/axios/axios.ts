@@ -1,5 +1,5 @@
 import { HttpAdapter } from "../adapter";
-import { Axios, AxiosRequestConfig, AxiosResponse } from "axios";
+import { Axios, AxiosRequestConfig } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
 import {
@@ -148,12 +148,9 @@ export class AxiosHttpAdapter extends HttpAdapter<
     return this.client.request(Object.assign({}, details, overrides));
   }
 
-  override parseResponse(
-    method: OperationKeys | string,
-    res: AxiosResponse
-  ): any {
+  override parseResponse(method: OperationKeys | string, res: any): any {
     if (res.status >= 400)
-      throw AxiosHttpAdapter.parseError(res.status.toString());
+      throw this.parseError((res.error as Error) || (res.status as any));
     switch (method) {
       case BulkCrudOperationKeys.CREATE_ALL:
       case BulkCrudOperationKeys.READ_ALL:
@@ -162,16 +159,16 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case PreparedStatementKeys.FIND_BY:
       case PreparedStatementKeys.LIST_BY:
       case PreparedStatementKeys.PAGE_BY:
-        return res;
+        return res.body;
       case OperationKeys.CREATE:
       case OperationKeys.READ:
       case OperationKeys.UPDATE:
       case OperationKeys.DELETE:
-        return res;
+        return res.body;
       case PreparedStatementKeys.FIND_ONE_BY:
       case "statement":
       default:
-        return res;
+        return res.body;
     }
   }
 
@@ -192,7 +189,10 @@ export class AxiosHttpAdapter extends HttpAdapter<
   ): Promise<Record<string, any>> {
     const { log, ctx } = this.logCtx(args, this.create);
     try {
-      const url = this.url(tableName);
+      const url = this.url(
+        tableName,
+        this.extractIdArgs(tableName, id as string)
+      );
       const cfg = this.toRequest(ctx);
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`

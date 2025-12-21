@@ -316,12 +316,15 @@ export abstract class HttpAdapter<
       `${this.config.protocol}://${this.config.host}/${tableName}${pathParams && pathParams.length ? `/${(pathParams as string[]).join("/")}` : ""}`
     );
     if (queryParams)
-      Object.entries(queryParams).forEach(([key, value]) =>
-        url.searchParams.append(
-          key,
-          Array.isArray(value) ? value.join(",") : value.toString()
-        )
-      );
+      Object.entries(queryParams).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach((v) => url.searchParams.append(key, v.toString()));
+        } else if (typeof value === "object") {
+          url.searchParams.append(key, JSON.stringify(value));
+        } else {
+          url.searchParams.append(key, value.toString());
+        }
+      });
 
     return url.toString();
   }

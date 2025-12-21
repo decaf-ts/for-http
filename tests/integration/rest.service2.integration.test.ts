@@ -30,19 +30,19 @@ describe("RestService integration", () => {
   const client = {
     post: async (url: string, body: any) => {
       mock("post", url, body);
-      return url.includes("bulk") ? [] : {};
+      return { status: 200, body: url.includes("bulk") ? [] : {} };
     },
     get: async (url: string) => {
       mock("get", url);
-      return url.includes("bulk") ? [{}] : {};
+      return { status: 200, body: url.includes("bulk") ? [] : {} };
     },
     put: async (url: string, body: any) => {
       mock("put", url, body);
-      return url.includes("bulk") ? [] : {};
+      return { status: 200, body: url.includes("bulk") ? [] : {} };
     },
     delete: async (url: string) => {
       mock("delete", url);
-      return url.includes("bulk") ? [] : {};
+      return { status: 200, body: url.includes("bulk") ? [] : {} };
     },
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     request: async (opts: any, ctx: any) => {
@@ -113,9 +113,16 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenLastCalledWith(
       "get",
       expect.stringContaining(
-        enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=2%2C4`)
+        enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=2&ids=4`)
       )
     );
+
+    jest
+      .spyOn(repo, "readAll")
+      .mockImplementation(() =>
+        Promise.resolve([new Dummy({ id: "3", name: "A" })])
+      );
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const updated = await repo.updateAll([new Dummy({ id: "3", name: "B" })]);
     expect(mock).toHaveBeenLastCalledWith(
@@ -129,7 +136,7 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenLastCalledWith(
       "delete",
       expect.stringContaining(
-        enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=4%2C6`)
+        enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=4&ids=6`)
       )
     );
   });
