@@ -1,10 +1,11 @@
 import { AxiosHttpAdapter } from "../../src/index";
 import { RestService } from "../../src/RestService";
 import type { HttpConfig } from "../../src/types";
-import { id } from "@decaf-ts/db-decorators";
+import { Context, id } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { prop } from "@decaf-ts/decoration";
-import { toKebabCase } from "@decaf-ts/logging";
+import { Logging, toKebabCase } from "@decaf-ts/logging";
+import { OrderDirection, PersistenceKeys } from "@decaf-ts/core";
 
 @model()
 class Dummy extends Model {
@@ -68,7 +69,7 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenLastCalledWith(
       "post",
       expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
-      { id: "1", name: "A" }
+      expect.objectContaining({ id: "1", name: "A" })
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -83,7 +84,7 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenLastCalledWith(
       "put",
       expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
-      { id: "3", name: "B" }
+      expect.objectContaining({ id: "3", name: "B" })
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -100,7 +101,7 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenLastCalledWith(
       "post",
       expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}/bulk`),
-      [{ id: "1", name: "A" }]
+      [expect.objectContaining({ id: "1", name: "A" })]
     );
 
     function enc(url) {
@@ -120,7 +121,7 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenLastCalledWith(
       "put",
       expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}/bulk`),
-      [{ id: "3", name: "B" }]
+      [expect.objectContaining({ id: "3", name: "B" })]
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -131,5 +132,28 @@ describe("RestService integration", () => {
         enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=4%2C6`)
       )
     );
+  });
+
+  it("handles paging via prepared statements using simple queries", async () => {
+    const ctx = new Context().accumulate({
+      logger: Logging.for(expect.getState().currentTestName),
+    });
+
+    const mock = jest.spyOn(client, "request");
+
+    const paginator = await repo
+      .select()
+      .orderBy(["name", OrderDirection.ASC])
+      .paginate(10);
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const page = await paginator.page(1, ctx);
+
+    expect(mock).toHaveBeenCalledWith({
+      method: "GET",
+      url: expect.stringContaining(
+        `/${toKebabCase(Model.tableName(Dummy))}/${PersistenceKeys.STATEMENT}/paginateBy/name/1?direction=asc&limit=10`
+      ),
+    });
   });
 });

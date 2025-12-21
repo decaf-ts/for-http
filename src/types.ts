@@ -1,5 +1,4 @@
 import { AdapterFlags } from "@decaf-ts/core";
-import { ResponseParser } from "./ResponseParser";
 
 /**
  * @description HTTP configuration type
@@ -12,7 +11,6 @@ import { ResponseParser } from "./ResponseParser";
 export type HttpConfig = {
   protocol: "http" | "https";
   host: string;
-  responseParser?: ResponseParser;
 };
 
 /**

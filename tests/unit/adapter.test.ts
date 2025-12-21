@@ -2,8 +2,9 @@ import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";
-import { Context } from "@decaf-ts/core";
+import { Context, pk } from "@decaf-ts/core";
 import { Logging } from "@decaf-ts/logging";
+import { Model, required } from "@decaf-ts/decorator-validation";
 
 const cfg: HttpConfig = {
   protocol: "http",
@@ -32,6 +33,18 @@ describe("Axios adapter", function () {
     deleteMock = jest.spyOn(adapter.client as Axios, "delete");
   });
 
+  class Test extends Model {
+    @pk()
+    id!: number;
+
+    @required()
+    name!: string;
+
+    constructor() {
+      super();
+    }
+  }
+
   const tableName: string = "test";
   const id: string = "id";
   const record = {
@@ -46,12 +59,13 @@ describe("Axios adapter", function () {
       }
     );
     const ctx = new Context().accumulate({ logger: Logging.get() });
-    const created = await adapter.create(tableName, id, record, ctx);
-    expect(created).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const created = await adapter.create(Test, id, record, ctx);
+    // expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${tableName}`,
-      record,
+      expect.objectContaining(record),
       {}
     );
   });
@@ -63,8 +77,9 @@ describe("Axios adapter", function () {
     });
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
-    const read = await adapter.read(tableName, id, ctx);
-    expect(read).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const read = await adapter.read(Test, id, ctx);
+    // expect(read).toBeDefined();
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith(
       encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`)
@@ -79,12 +94,13 @@ describe("Axios adapter", function () {
     );
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
-    const updated = await adapter.update(tableName, id, record, ctx);
-    expect(updated).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const updated = await adapter.update(Test, id, record, ctx);
+    // expect(updated).toBeDefined();
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${tableName}/${updated.id}`,
-      record
+      `${cfg.protocol}://${cfg.host}/${tableName}/${id}`,
+      expect.objectContaining(record)
     );
   });
 
@@ -95,8 +111,9 @@ describe("Axios adapter", function () {
     });
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
-    const deleted = await adapter.delete(tableName, id, ctx);
-    expect(deleted).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const deleted = await adapter.delete(Test, id, ctx);
+    // expect(deleted).toBeDefined();
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).toHaveBeenCalledWith(
       encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`)

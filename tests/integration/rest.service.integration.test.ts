@@ -11,7 +11,7 @@ import {
 } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { Constructor, prop } from "@decaf-ts/decoration";
-import { ContextualArgs } from "../../../core/src/index";
+import { ContextualArgs } from "@decaf-ts/core";
 
 class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
   private readonly observerEntries: { observer: any; filter?: any }[] = [];
@@ -25,6 +25,10 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
   override async request<V>(details: any): Promise<V> {
     return details as V;
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  toRequest(query: any): any {}
+
   async create<M extends Model>(
     tableName: Constructor<M>,
     id: PrimaryKeyType,

@@ -97,7 +97,7 @@ describe("RestRepository", function () {
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}`,
-      created,
+      expect.objectContaining(created),
       { headers: expect.any(Object) }
     );
     expect(created).toBeInstanceOf(ComposedTestModel);
@@ -134,7 +134,10 @@ describe("RestRepository", function () {
     });
 
     const toUpdate = new ComposedTestModel(
-      Object.assign({}, created, { address: "other" })
+      Object.assign({}, expect.objectContaining(created), {
+        id: 1,
+        address: "other",
+      })
     );
 
     updated = await repo.update(toUpdate);
@@ -142,7 +145,7 @@ describe("RestRepository", function () {
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
-      updated
+      expect.objectContaining(updated)
     );
 
     expect(updated).toBeInstanceOf(ComposedTestModel);

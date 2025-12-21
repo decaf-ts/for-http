@@ -66,7 +66,7 @@ describe("Rest Service", () => {
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}`,
-      model,
+      expect.objectContaining(model),
       { headers: expect.any(Object) }
     );
     expect(created).toBeInstanceOf(TestModel);
@@ -101,7 +101,7 @@ describe("Rest Service", () => {
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}/${toUpdate.id}`,
-      toUpdate
+      expect.objectContaining(toUpdate)
     );
 
     expect(updated).toBeInstanceOf(TestModel);

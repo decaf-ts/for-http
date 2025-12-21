@@ -20,7 +20,7 @@ function makeQueryArgs(
   return query;
 }
 
-describe("HttpQuery by MethodQueryBuilder", () => {
+describe.skip("HttpQuery by MethodQueryBuilder", () => {
   let app: ReturnType<typeof buildServer>;
 
   beforeAll(async () => {

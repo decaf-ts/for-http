@@ -93,7 +93,7 @@ describe("RestRepository", function () {
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}`,
-      created,
+      expect.objectContaining(created),
       { headers: expect.any(Object) }
     );
     expect(created).toBeInstanceOf(OtherTestModel);
@@ -136,7 +136,7 @@ describe("RestRepository", function () {
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${table}/${model.id}`,
-      updated
+      expect.objectContaining(updated)
     );
 
     expect(updated).toBeInstanceOf(OtherTestModel);

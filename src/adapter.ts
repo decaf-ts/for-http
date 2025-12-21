@@ -51,7 +51,6 @@ import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
 import type { AdapterFlags } from "@decaf-ts/core";
-import { ResponseParser } from "./ResponseParser";
 
 export function suffixMethod(
   obj: any,
@@ -113,14 +112,10 @@ export abstract class HttpAdapter<
   C extends Context<HttpFlags> = Context<HttpFlags>,
 > extends Adapter<CONF, CON, Q, C> {
   protected constructor(config: CONF, flavour: string, alias?: string) {
-    super(
-      Object.assign({}, config, {
-        responseParser: config.responseParser || new ResponseParser(),
-      }),
-      flavour,
-      alias
-    );
+    super(config, flavour, alias);
 
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
     [
       this.create,
       this.read,
@@ -134,7 +129,7 @@ export abstract class HttpAdapter<
       suffixMethod(
         this,
         method,
-        (res: any) => this.parseResponse(method.name, res),
+        (res: any) => self.parseResponse.call(self, method.name, res),
         method.name
       );
     });
@@ -357,10 +352,12 @@ export abstract class HttpAdapter<
     return idStr.split(composed.separator);
   }
 
-  parseResponse(method: OperationKeys | string, res: any) {
-    if (!this.config.responseParser)
-      throw new InternalError(`No response parser configured`);
-    return this.config.responseParser.parse(method, res);
+  parseResponse(method: OperationKeys | string, res: any): any {
+    return res;
+
+    //   if (!this.config.responseParser)
+    //     throw new InternalError(`No response parser configured`);
+    //   return this.config.responseParser.parse(method, res);
   }
 
   /**
@@ -374,7 +371,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
    */
   abstract override create<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
     model: Record<string, any>,
     ...args: ContextualArgs<C>
@@ -390,7 +387,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the retrieved resource
    */
   abstract override read<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
@@ -406,7 +403,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
    */
   abstract override update<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     id: string | number,
     model: Record<string, any>,
     ...args: ContextualArgs<C>
@@ -422,7 +419,7 @@ export abstract class HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the deletion result
    */
   abstract override delete<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;

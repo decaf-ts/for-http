@@ -1,17 +1,23 @@
 import { HttpAdapter } from "../adapter";
-import { Axios, AxiosRequestConfig } from "axios";
+import { Axios, AxiosRequestConfig, AxiosResponse } from "axios";
 import { HttpConfig } from "../types";
 import { AxiosFlags } from "./types";
-import { BaseError, PrimaryKeyType } from "@decaf-ts/db-decorators";
+import {
+  BaseError,
+  BulkCrudOperationKeys,
+  OperationKeys,
+  PrimaryKeyType,
+} from "@decaf-ts/db-decorators";
 import {
   Context,
   ContextualArgs,
   MaybeContextualArg,
   PersistenceKeys,
   PreparedStatement,
+  PreparedStatementKeys,
 } from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
-import { Model } from "@decaf-ts/decorator-validation";
+import { Model, ModelKeys } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 
 /**
@@ -142,6 +148,33 @@ export class AxiosHttpAdapter extends HttpAdapter<
     return this.client.request(Object.assign({}, details, overrides));
   }
 
+  override parseResponse(
+    method: OperationKeys | string,
+    res: AxiosResponse
+  ): any {
+    if (res.status >= 400)
+      throw AxiosHttpAdapter.parseError(res.status.toString());
+    switch (method) {
+      case BulkCrudOperationKeys.CREATE_ALL:
+      case BulkCrudOperationKeys.READ_ALL:
+      case BulkCrudOperationKeys.UPDATE_ALL:
+      case BulkCrudOperationKeys.DELETE_ALL:
+      case PreparedStatementKeys.FIND_BY:
+      case PreparedStatementKeys.LIST_BY:
+      case PreparedStatementKeys.PAGE_BY:
+        return res;
+      case OperationKeys.CREATE:
+      case OperationKeys.READ:
+      case OperationKeys.UPDATE:
+      case OperationKeys.DELETE:
+        return res;
+      case PreparedStatementKeys.FIND_ONE_BY:
+      case "statement":
+      default:
+        return res;
+    }
+  }
+
   /**
    * @description Creates a new resource via HTTP POST
    * @summary Implementation of the abstract create method from HttpAdapter.
@@ -152,9 +185,9 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
    */
   override async create<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
-    model: Record<string, any>,
+    model: M,
     ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>> {
     const { log, ctx } = this.logCtx(args, this.create);
@@ -164,16 +197,22 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return await this.client.post(url, model, cfg);
+      return await this.client.post(
+        url,
+        Object.assign({}, model, {
+          [ModelKeys.ANCHOR]: tableName.name,
+        }),
+        cfg
+      );
     } catch (e: any) {
       throw this.parseError(e);
     }
   }
 
   override async createAll<M extends Model>(
-    clazz: Constructor<M> | string,
+    clazz: Constructor<M>,
     id: PrimaryKeyType[],
-    model: Record<string, any>[],
+    model: M[],
     ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>[]> {
     const { log, ctx } = this.logCtx(args, this.createAll);
@@ -183,7 +222,15 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.post(url, model, cfg);
+      return this.client.post(
+        url,
+        model.map((m: M) =>
+          Object.assign({}, m, {
+            [ModelKeys.ANCHOR]: clazz.name,
+          })
+        ),
+        cfg
+      );
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -241,7 +288,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
    * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
    */
   override async update<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
     model: Record<string, any>,
     ...args: ContextualArgs<Context<AxiosFlags>>
@@ -256,16 +303,21 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.put(url, model);
+      return this.client.put(
+        url,
+        Object.assign({}, model, {
+          [ModelKeys.ANCHOR as keyof typeof model]: tableName.name,
+        })
+      );
     } catch (e: any) {
       throw this.parseError(e);
     }
   }
 
   override async updateAll<M extends Model>(
-    tableName: Constructor<M> | string,
+    tableName: Constructor<M>,
     ids: PrimaryKeyType[],
-    model: Record<string, any>[],
+    model: M[],
     ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<Record<string, any>[]> {
     const { log, ctx } = this.logCtx(args, this.updateAll);
@@ -275,7 +327,14 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.put(url, model);
+      return this.client.put(
+        url,
+        model.map((m: M) =>
+          Object.assign({}, m, {
+            [ModelKeys.ANCHOR]: tableName.name,
+          })
+        )
+      );
     } catch (e: any) {
       throw this.parseError(e);
     }

@@ -5,20 +5,31 @@ import {
   BaseError,
   Context,
   InternalError,
+  OperationKeys,
   PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
 import type { HttpConfig } from "../../src/types";
 
 class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
+  parseResponse(method: OperationKeys | string, res: any) {
+    return res;
+  }
   constructor(config: HttpConfig, alias?: string) {
     super(config, "test-http", alias);
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  toRequest(query: any): any {
+    return {};
+  }
+
   protected override getClient() {
     return {} as any;
   }
   override async request<V>(details: any): Promise<V> {
     return details as V;
   }
+  // @ts-expect-error for test
   async create(
     tableName: string,
     id: PrimaryKeyType,
@@ -28,6 +39,7 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
   ): Promise<Record<string, any>> {
     return { tableName, id, ...model };
   }
+  // @ts-expect-error for test
   async read(
     tableName: string,
     id: PrimaryKeyType,
@@ -36,6 +48,7 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
   ): Promise<Record<string, any>> {
     return { tableName, id } as any;
   }
+  // @ts-expect-error for test
   async update(
     tableName: string,
     id: PrimaryKeyType,
@@ -45,6 +58,7 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
   ): Promise<Record<string, any>> {
     return { tableName, id, ...model };
   }
+  // @ts-expect-error for test
   async delete(
     tableName: string,
     id: PrimaryKeyType,
