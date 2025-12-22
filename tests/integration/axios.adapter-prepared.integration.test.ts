@@ -95,8 +95,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const page = await repo.paginateBy(
       "id",
       "asc" as any,
-      10,
-      { page: 1 },
+      { offset: 1, limit: 10 },
       ctx
     );
 
@@ -166,7 +165,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(mock).toHaveBeenCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test/1?direction=asc&limit=1`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test?direction=asc&limit=1`
       ),
     });
   });
@@ -202,7 +201,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(mock).toHaveBeenCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1/1?direction=asc&limit=10`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10`
       ),
     });
   });

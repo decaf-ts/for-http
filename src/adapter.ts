@@ -321,7 +321,7 @@ export abstract class HttpAdapter<
           value.forEach((v) => url.searchParams.append(key, v.toString()));
         } else if (typeof value === "object") {
           url.searchParams.append(key, JSON.stringify(value));
-        } else {
+        } else if (typeof value !== "undefined") {
           url.searchParams.append(key, value.toString());
         }
       });

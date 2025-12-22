@@ -1,13 +1,16 @@
 import {
+  ContextualArgs,
+  DirectionLimitOffset,
   MaybeContextualArg,
   Paginator,
   PreparedStatement,
+  PreparedStatementKeys,
+  Repository,
   UnsupportedError,
 } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import { ContextualArgs } from "@decaf-ts/core";
 
 export class HttpPaginator<
   M extends Model,
@@ -18,39 +21,45 @@ export class HttpPaginator<
     super(adapter, query, size, clazz);
   }
 
+  protected override async pagePrepared(
+    page?: number,
+    ...argz: ContextualArgs<any>
+  ): Promise<M[]> {
+    const repo = Repository.forModel(this.clazz, this.adapter.alias);
+    const statement = this.query as PreparedStatement<M>;
+    const { method, args, params } = statement;
+    const regexp = new RegExp(
+      `^${PreparedStatementKeys.FIND_BY}|${PreparedStatementKeys.LIST_BY}`,
+      "gi"
+    );
+    if (!method.match(regexp))
+      throw new UnsupportedError(
+        `Method ${method} is not supported for pagination`
+      );
+    regexp.lastIndex = 0;
+    const pagedMethod = method.replace(regexp, PreparedStatementKeys.PAGE_BY);
+
+    const preparedArgs = [pagedMethod, ...args];
+    const preparedParams: DirectionLimitOffset = {
+      direction: params.direction,
+      limit: this.size,
+      offset: page,
+      bookmark: this._bookmark,
+    };
+
+    preparedArgs.push(preparedParams);
+
+    const result = await repo.statement(
+      ...(preparedArgs as [string, any]),
+      ...argz
+    );
+    return this.apply(result);
+  }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected prepare(rawStatement: Q): Q {
     throw new UnsupportedError(
       `Raw query access must be implemented by a subclass. only prepared statements are natively available`
     );
-  }
-
-  protected override async pagePrepared(
-    page?: number,
-    ...argz: ContextualArgs<any>
-  ) {
-    return this.apply(await super.pagePrepared(page, ...argz));
-    // const repo = Repository.forModel(this.clazz, this.adapter.alias);
-    // const statement = this.query as PreparedStatement<M>;
-    // const { method, args, params } = statement;
-    // const regexp = new RegExp(
-    //   `^${PreparedStatementKeys.FIND_BY}|${PreparedStatementKeys.LIST_BY}`,
-    //   "gi"
-    // );
-    // if (!method.match(regexp))
-    //   throw new UnsupportedError(
-    //     `Method ${method} is not supported for pagination`
-    //   );
-    // regexp.lastIndex = 0;
-    // const pagedMethod = method.replace(regexp, PreparedStatementKeys.PAGE_BY);
-    // const result = repo.statement(
-    //   pagedMethod,
-    //   ...args,
-    //   page,
-    //   Object.assign({}, params, { limit: this.size }),
-    //   ...argz
-    // );
-    // return result;
   }
 
   override page(

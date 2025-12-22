@@ -129,8 +129,10 @@ export class RestRepository<
   override async paginateBy(
     key: keyof M,
     order: OrderDirection,
-    size: number,
-    ref: { page?: number; bookmark?: string } | number = { page: 1 },
+    ref: Omit<DirectionLimitOffset, "direction"> = {
+      offset: 1,
+      limit: 10,
+    },
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<SerializedPage<M>> {
     const contextArgs = await Context.args<M, ContextOf<A>>(
@@ -142,21 +144,20 @@ export class RestRepository<
     );
     const { log, ctxArgs } = this.logCtx(contextArgs.args, this.paginateBy);
     log.verbose(
-      `paginating ${Model.tableName(this.class)} with page size ${size}`
+      `paginating ${Model.tableName(this.class)} with page size ${ref.limit}`
     );
-    if (typeof ref === "number") ref = { page: ref };
 
     const params: DirectionLimitOffset = {
       direction: order,
-      limit: size,
+      limit: ref.limit,
     };
     if (ref.bookmark) {
-      params.offset = ref.bookmark as any;
+      params.bookmark = ref.bookmark as any;
     }
     return this.statement(
       this.paginateBy.name,
       key,
-      ref.page,
+      ref.offset,
       params,
       ...ctxArgs
     );

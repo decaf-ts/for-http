@@ -169,7 +169,7 @@ describe("RestService integration", () => {
     expect(mock).toHaveBeenCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${toKebabCase(Model.tableName(Dummy))}/${PersistenceKeys.STATEMENT}/paginateBy/name/1?direction=asc&limit=10`
+        `/${toKebabCase(Model.tableName(Dummy))}/${PersistenceKeys.STATEMENT}/paginateBy/name?direction=asc&limit=10&offset=1`
       ),
     });
   });
