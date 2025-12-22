@@ -489,7 +489,7 @@ export abstract class HttpAdapter<
       query,
       size,
       clazz
-    );
+    ) as any;
   }
 
   /**

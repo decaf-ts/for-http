@@ -1,12 +1,14 @@
 import {
   Context,
   ContextOf,
+  DirectionLimitOffset,
   MaybeContextualArg,
   OrderDirection,
   PersistenceKeys,
   PreparedStatement,
   PreparedStatementKeys,
   Repository,
+  SerializedPage,
 } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
@@ -128,8 +130,9 @@ export class RestRepository<
     key: keyof M,
     order: OrderDirection,
     size: number,
+    ref: { page?: number; bookmark?: string } | number = { page: 1 },
     ...args: MaybeContextualArg<ContextOf<A>>
-  ) {
+  ): Promise<SerializedPage<M>> {
     const contextArgs = await Context.args<M, ContextOf<A>>(
       PreparedStatementKeys.PAGE_BY,
       this.class,
@@ -141,9 +144,22 @@ export class RestRepository<
     log.verbose(
       `paginating ${Model.tableName(this.class)} with page size ${size}`
     );
-    return this.select()
-      .orderBy([key, order])
-      .paginate(size, ...ctxArgs);
+    if (typeof ref === "number") ref = { page: ref };
+
+    const params: DirectionLimitOffset = {
+      direction: order,
+      limit: size,
+    };
+    if (ref.bookmark) {
+      params.offset = ref.bookmark as any;
+    }
+    return this.statement(
+      this.paginateBy.name,
+      key,
+      ref.page,
+      params,
+      ...ctxArgs
+    );
   }
 
   override async listBy(

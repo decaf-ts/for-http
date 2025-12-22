@@ -12,7 +12,7 @@ export class HttpPaginator<
   M extends Model,
   Q extends PreparedStatement<M>,
   A extends HttpAdapter<any, any, any, Q, any>,
-> extends Paginator<M, M, Q> {
+> extends Paginator<M, M[], Q> {
   constructor(adapter: A, query: Q, size: number, clazz: Constructor<M>) {
     super(adapter, query, size, clazz);
   }

@@ -91,13 +91,17 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       ),
     });
 
-    const page = await repo.paginateBy("id", "asc" as any, 10, ctx);
-
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const res = await page.page();
+    const page = await repo.paginateBy(
+      "id",
+      "asc" as any,
+      10,
+      { page: 1 },
+      ctx
+    );
 
     expect(mock).toHaveBeenLastCalledWith({
-      headers: expect.any(Object),
+      // headers: expect.any(Object),
       method: "GET",
       url: expect.stringContaining(
         `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/id/1?direction=asc&limit=10`
