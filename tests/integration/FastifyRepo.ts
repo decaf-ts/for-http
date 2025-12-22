@@ -143,16 +143,17 @@ export class FastifyRepo extends Repository<TestUserModel, any> {
     throw new UnsupportedError(`Method overridden by @query decorator.`);
   }
 
-  @query()
-  findByAgeBetween(
-    age1: number,
-    age2: number,
-    orderBy?: OrderBySelector<any>[],
-    limit?: number,
-    offset?: number
-  ): Promise<TestUserModel[]> {
-    throw new UnsupportedError(`Method overridden by @query decorator.`);
-  }
+  // Between deprecated
+  // @query()
+  // findByAgeBetween(
+  //   age1: number,
+  //   age2: number,
+  //   orderBy?: OrderBySelector<any>[],
+  //   limit?: number,
+  //   offset?: number
+  // ): Promise<TestUserModel[]> {
+  //   throw new UnsupportedError(`Method overridden by @query decorator.`);
+  // }
 
   @query()
   async findByActive(
@@ -196,7 +197,7 @@ export class FastifyRepo extends Repository<TestUserModel, any> {
   }
 
   @query()
-  findByActiveOrderByNameAsc(
+  findByActiveOrderByName(
     active: boolean,
     orderBy?: OrderBySelector<any>[],
     limit?: number,
@@ -221,7 +222,7 @@ export class FastifyRepo extends Repository<TestUserModel, any> {
     allowOrderBy: false,
     throws: true,
   })
-  findByAgeGreaterThanThenThrows(
+  findByAgeGreaterThanOrderByName(
     age: number,
     orderBy?: OrderBySelector<any>[],
     limit?: number,
