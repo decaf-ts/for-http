@@ -3,6 +3,7 @@ import { Repository } from "@decaf-ts/core";
 
 type OrderBy = [string, "asc" | "dsc"];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function parseOrderBy(orderBy?: string): OrderBy | undefined {
   if (!orderBy) return undefined;
 
