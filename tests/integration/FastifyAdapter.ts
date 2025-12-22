@@ -37,7 +37,7 @@ export function buildServer(repo: Repository<any, any>): FastifyInstance {
 
     const args = [
       ...Object.keys(rawArgs).map((k) => parseValue(rawArgs[k])),
-      [parseOrderBy(orderBy)],
+      orderBy, // ? [parseOrderBy(orderBy)] : undefined,
       limit ? Number(limit) : undefined,
       skip ? Number(skip) : undefined,
     ];
