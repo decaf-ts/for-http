@@ -146,8 +146,18 @@ describe("RestService integration", () => {
       logger: Logging.for(expect.getState().currentTestName),
     });
 
-    const mock = jest.spyOn(client, "request");
-
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const mock = jest.spyOn(client, "request").mockImplementation((req) => {
+      return {
+        status: 200,
+        body: {
+          current: 1,
+          total: 8,
+          count: 8,
+          data: [{}],
+        },
+      };
+    });
     const paginator = await repo
       .select()
       .orderBy(["name", OrderDirection.ASC])

@@ -141,13 +141,24 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const repo = Repository.forModel(TestModel);
     expect(repo).toBeInstanceOf(RestService);
 
-    const mock = jest.spyOn(client, "request");
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const mock = jest.spyOn(client, "request").mockImplementation((req) => {
+      return {
+        status: 200,
+        body: {
+          current: 1,
+          total: 8,
+          count: 8,
+          data: [{}],
+        },
+      };
+    });
 
     const paginator = await repo
       .select()
       .where(repo.attr("name").eq("test"))
       .orderBy(["name", OrderDirection.ASC])
-      .paginate(10);
+      .paginate(1);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const page = await paginator.page(1, ctx);
@@ -155,7 +166,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     expect(mock).toHaveBeenCalledWith({
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test/1?direction=asc&limit=10`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test/1?direction=asc&limit=1`
       ),
     });
   });
@@ -168,8 +179,18 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const repo = Repository.forModel(TestModel);
     expect(repo).toBeInstanceOf(RestService);
 
-    const mock = jest.spyOn(client, "request");
-
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const mock = jest.spyOn(client, "request").mockImplementation((req) => {
+      return {
+        status: 200,
+        body: {
+          current: 1,
+          total: 8,
+          count: 8,
+          data: [{}],
+        },
+      };
+    });
     const paginator = await repo
       .select(["id"])
       .where(repo.attr("name").eq("test").and(repo.attr("id").eq(1)))
