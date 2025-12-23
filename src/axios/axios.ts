@@ -148,7 +148,11 @@ export class AxiosHttpAdapter extends HttpAdapter<
     return this.client.request(Object.assign({}, details, overrides));
   }
 
-  override parseResponse(method: OperationKeys | string, res: any): any {
+  override parseResponse<M extends Model>(
+    clazz: Constructor<M>,
+    method: OperationKeys | string,
+    res: any
+  ): any {
     if (res.status >= 400)
       throw this.parseError((res.error as Error) || (res.status as any));
     switch (method) {
@@ -167,6 +171,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
         return res.body;
       case PreparedStatementKeys.FIND_ONE_BY:
       case "statement":
+        return super.parseResponse(clazz, method, res.body);
       default:
         return res.body;
     }

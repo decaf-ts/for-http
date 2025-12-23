@@ -129,7 +129,8 @@ export abstract class HttpAdapter<
       suffixMethod(
         this,
         method,
-        (res: any) => self.parseResponse.call(self, method.name, res),
+        (res: any) =>
+          self.parseResponse.call(self, undefined, method.name, res),
         method.name
       );
     });
@@ -355,12 +356,17 @@ export abstract class HttpAdapter<
     return idStr.split(composed.separator);
   }
 
-  parseResponse(method: OperationKeys | string, res: any): any {
-    return res;
+  parseResponse<M extends Model>(
+    clazz: Constructor<M> | undefined,
+    method: OperationKeys | string,
+    res: any
+  ): any {
+    if (clazz && Paginator.isSerializedPage(res))
+      return Object.assign({}, res, {
+        data: res.data.map((d: any) => new clazz(d)),
+      });
 
-    //   if (!this.config.responseParser)
-    //     throw new InternalError(`No response parser configured`);
-    //   return this.config.responseParser.parse(method, res);
+    return res;
   }
 
   /**

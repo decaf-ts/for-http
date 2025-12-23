@@ -259,6 +259,7 @@ export class RestRepository<
     const req = this.adapter.toRequest(query, ctx);
     log.verbose(`Executing prepared statement ${name}`);
     return this.adapter.parseResponse(
+      this.class,
       name,
       await this.request(req, ...ctxArgs)
     );
