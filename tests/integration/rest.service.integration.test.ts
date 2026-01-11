@@ -4,14 +4,13 @@ import type { HttpConfig } from "../../src/types";
 import {
   InternalError,
   BaseError,
-  Context,
   PrimaryKeyType,
   id,
   OperationKeys,
 } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { Constructor, prop } from "@decaf-ts/decoration";
-import { ContextualArgs } from "@decaf-ts/core";
+import { ContextualArgs, Context } from "@decaf-ts/core";
 
 class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
   private readonly observerEntries: { observer: any; filter?: any }[] = [];
@@ -46,8 +45,8 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
   ): Promise<Record<string, any>> {
     return { id, tableName } as any;
   }
-  async update(
-    tableName: string,
+  async update<M extends Model>(
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
     model: Record<string, any>,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -55,8 +54,8 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
   ): Promise<Record<string, any>> {
     return { ...model, updated: true };
   }
-  async delete(
-    tableName: string,
+  async delete<M extends Model>(
+    tableName: Constructor<M>,
     id: PrimaryKeyType,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context>
@@ -188,12 +187,7 @@ describe("RestService integration", () => {
 
     svc.observe(secondObserver as any);
 
-    const ctx = await Context.from(
-      OperationKeys.CREATE,
-      {},
-      Dummy as Constructor<Dummy>
-    );
-    ctx.accumulate({ breakOnHandlerError: false });
+    const ctx = await svc["adapter"]["logCtx"]([], "test");
     await svc.updateObservers("users", "CREATE", "1", ctx as any);
     expect(calls.length).toBe(2);
 

@@ -13,12 +13,6 @@ import {
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
-import {
-  OperationKeys,
-  ValidationError,
-  enforceDBDecorators,
-  reduceErrorsToPrint,
-} from "@decaf-ts/db-decorators";
 
 /**
  * @description Repository for REST API interactions
@@ -81,51 +75,6 @@ export class RestRepository<
     return this.adapter.url(tableName, pathParams as any, queryParams as any);
   }
 
-  protected override async createAllPrefix(
-    models: M[],
-    ...args: MaybeContextualArg<ContextOf<A>>
-  ): Promise<[M[], ...any[], ContextOf<A>]> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      OperationKeys.CREATE,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const ignoreHandlers = contextArgs.context.get("ignoreHandlers");
-    const ignoreValidate = contextArgs.context.get("ignoreValidation");
-    if (!models.length) return [models, ...contextArgs.args] as any;
-
-    models = await Promise.all(
-      models.map(async (m) => {
-        m = new this.class(m);
-        if (!ignoreHandlers)
-          await enforceDBDecorators<M, Repository<M, A>, any>(
-            this,
-            contextArgs.context,
-            m,
-            OperationKeys.CREATE,
-            OperationKeys.ON
-          );
-        return m;
-      })
-    );
-
-    if (!ignoreValidate) {
-      const ignoredProps =
-        contextArgs.context.get("ignoredValidationProperties") || [];
-
-      const errors = await Promise.all(
-        models.map((m) => Promise.resolve(m.hasErrors(...ignoredProps)))
-      );
-
-      const errorMessages = reduceErrorsToPrint(errors);
-
-      if (errorMessages) throw new ValidationError(errorMessages);
-    }
-    return [models, ...contextArgs.args] as any;
-  }
-
   override async paginateBy(
     key: keyof M,
     order: OrderDirection,
@@ -135,29 +84,25 @@ export class RestRepository<
     },
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<SerializedPage<M>> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      PreparedStatementKeys.PAGE_BY,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const { log, ctxArgs } = this.logCtx(contextArgs.args, this.paginateBy);
+    const { offset, bookmark, limit } = ref;
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.PAGE_BY, true)
+    ).for(this.paginateBy);
     log.verbose(
-      `paginating ${Model.tableName(this.class)} with page size ${ref.limit}`
+      `paginating ${Model.tableName(this.class)} with page size ${limit}`
     );
 
     const params: DirectionLimitOffset = {
       direction: order,
-      limit: ref.limit,
+      limit: limit,
     };
-    if (ref.bookmark) {
-      params.bookmark = ref.bookmark as any;
+    if (bookmark) {
+      params.bookmark = bookmark as any;
     }
     return this.statement(
       this.paginateBy.name,
       key,
-      ref.offset,
+      offset,
       params,
       ...ctxArgs
     );
@@ -168,14 +113,9 @@ export class RestRepository<
     order: OrderDirection,
     ...args: MaybeContextualArg<ContextOf<A>>
   ) {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      "list",
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const { log, ctxArgs } = this.logCtx(contextArgs.args, this.listBy);
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.LIST_BY, true)
+    ).for(this.listBy);
     log.verbose(
       `listing ${Model.tableName(this.class)} by ${key as string} ${order}`
     );
@@ -192,16 +132,11 @@ export class RestRepository<
     value: any,
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<M[]> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      PreparedStatementKeys.FIND_BY,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const { log, ctxArgs } = this.logCtx(contextArgs.args, this.findBy);
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.FIND_BY, true)
+    ).for(this.findBy);
     log.verbose(
-      `finding all ${Model.tableName(this.class)} with ${key as string} ${value}`
+      `finding ${Model.tableName(this.class)} with ${key as string} ${value}`
     );
     return (await this.statement(
       this.findBy.name,
@@ -217,16 +152,11 @@ export class RestRepository<
     value: any,
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<M> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      PreparedStatementKeys.FIND_ONE_BY,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const { log, ctxArgs } = this.logCtx(contextArgs.args, this.findOneBy);
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.FIND_ONE_BY, true)
+    ).for(this.findOneBy);
     log.verbose(
-      `finding One ${Model.tableName(this.class)} with ${key as string} ${value}`
+      `finding ${Model.tableName(this.class)} with ${key as string} ${value}`
     );
     return (await this.statement(
       this.findOneBy.name,
@@ -241,14 +171,9 @@ export class RestRepository<
     name: string,
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<any> {
-    const contextArgs = await Context.args<M, ContextOf<A>>(
-      PersistenceKeys.STATEMENT,
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const { log, ctxArgs, ctx } = this.logCtx(contextArgs.args, this.statement);
+    const { log, ctx, ctxArgs } = (
+      await this.logCtx(args, PersistenceKeys.STATEMENT, true)
+    ).for(this.statement);
     const params = args.pop();
     const query: PreparedStatement<any> = {
       class: this.class,

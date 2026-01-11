@@ -101,7 +101,7 @@ describe("HttpAdapter base features", () => {
   test("parseError() should pass through errors as InternalError", () => {
     const err = new Error("boom");
     const parsed = adapter.parseError(err);
-    expect(parsed.message).toBe(`[InternalError] ${err.message}`);
+    expect(parsed.message).toBe(`[InternalError][500] ${err.message}`);
   });
 
   test("Sequence() should throw UnsupportedError", async () => {
