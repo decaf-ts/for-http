@@ -187,7 +187,7 @@ describe("RestService integration", () => {
 
     svc.observe(secondObserver as any);
 
-    const ctx = await svc["adapter"]["logCtx"]([], "test");
+    const ctx = new Context();
     await svc.updateObservers("users", "CREATE", "1", ctx as any);
     expect(calls.length).toBe(2);
 

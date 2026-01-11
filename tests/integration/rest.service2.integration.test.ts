@@ -1,7 +1,8 @@
 import { AxiosHttpAdapter } from "../../src/index";
 import { RestService } from "../../src/RestService";
 import type { HttpConfig } from "../../src/types";
-import { Context, id } from "@decaf-ts/db-decorators";
+import { Context } from "@decaf-ts/core";
+import { id } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { prop } from "@decaf-ts/decoration";
 import { Logging, toKebabCase } from "@decaf-ts/logging";
@@ -167,6 +168,7 @@ describe("RestService integration", () => {
     const page = await paginator.page(1, ctx);
 
     expect(mock).toHaveBeenCalledWith({
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
         `/${toKebabCase(Model.tableName(Dummy))}/${PersistenceKeys.STATEMENT}/paginateBy/name?direction=asc&limit=10&offset=1`

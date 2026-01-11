@@ -1,6 +1,6 @@
 import { AxiosHttpAdapter } from "../../src/axios/axios";
 import type { HttpConfig } from "../../src/types";
-import { Context } from "@decaf-ts/db-decorators";
+import { Context } from "@decaf-ts/core";
 import {
   OrderDirection,
   PersistenceKeys,
@@ -76,6 +76,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const found = await repo.findOneBy("id", 1, ctx);
 
     expect(mock).toHaveBeenCalledWith({
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
         `/${table}/${PersistenceKeys.STATEMENT}/findOneBy/id/1`
@@ -85,6 +86,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const list = await repo.listBy("id", "asc" as any, ctx);
 
     expect(mock).toHaveBeenLastCalledWith({
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
         `/${table}/${PersistenceKeys.STATEMENT}/listBy/id?direction=asc`
@@ -100,7 +102,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     );
 
     expect(mock).toHaveBeenLastCalledWith({
-      // headers: expect.any(Object),
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
         `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/id/1?direction=asc&limit=10`
@@ -163,9 +165,10 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const page = await paginator.page(1, ctx);
 
     expect(mock).toHaveBeenCalledWith({
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test?direction=asc&limit=1`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test?direction=asc&limit=1&offset=1`
       ),
     });
   });
@@ -199,9 +202,10 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     const page = await paginator.page(1, ctx);
 
     expect(mock).toHaveBeenCalledWith({
+      headers: {},
       method: "GET",
       url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10`
+        `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10&offset=1`
       ),
     });
   });

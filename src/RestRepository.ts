@@ -174,10 +174,14 @@ export class RestRepository<
     const { log, ctx, ctxArgs } = (
       await this.logCtx(args, PersistenceKeys.STATEMENT, true)
     ).for(this.statement);
-    const params = args.pop();
+    const argList = ctxArgs.slice(0, -1);
+    const lastArg = argList[argList.length - 1];
+    const hasParams =
+      typeof lastArg === "object" && lastArg !== null && !Array.isArray(lastArg);
+    const params = hasParams ? (argList.pop() as Record<string, any>) : undefined;
     const query: PreparedStatement<any> = {
       class: this.class,
-      args: args,
+      args: argList,
       method: name,
       params: params,
     } as PreparedStatement<any>;
