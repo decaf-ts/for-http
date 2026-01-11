@@ -157,7 +157,7 @@ describe("RestService integration", () => {
           count: 8,
           data: [{}],
         },
-      };
+      } as any;
     });
     const paginator = await repo
       .select()

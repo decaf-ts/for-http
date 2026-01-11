@@ -6,7 +6,6 @@ import {
   BaseError,
   PrimaryKeyType,
   id,
-  OperationKeys,
 } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { Constructor, prop } from "@decaf-ts/decoration";
