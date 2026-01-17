@@ -1,7 +1,7 @@
 import { AxiosHttpAdapter } from "../../src/index";
 import { RestService } from "../../src/RestService";
 import type { HttpConfig } from "../../src/types";
-import { Context } from "@decaf-ts/core";
+import { Context, PreparedStatementKeys } from "@decaf-ts/core";
 import { id } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { prop } from "@decaf-ts/decoration";
@@ -145,6 +145,8 @@ describe("RestService integration", () => {
   it("handles paging via prepared statements using simple queries", async () => {
     const ctx = new Context().accumulate({
       logger: Logging.for(expect.getState().currentTestName),
+      operation: PreparedStatementKeys.PAGE_BY,
+      affectedTables: [],
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

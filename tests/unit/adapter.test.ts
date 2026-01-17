@@ -2,9 +2,10 @@ import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";
-import { Context, pk } from "@decaf-ts/core";
+import { Context, pk, PreparedStatementKeys } from "@decaf-ts/core";
 import { Logging } from "@decaf-ts/logging";
 import { Model, required } from "@decaf-ts/decorator-validation";
+import { OperationKeys } from "@decaf-ts/db-decorators";
 
 const cfg: HttpConfig = {
   protocol: "http",
@@ -58,15 +59,21 @@ describe("Axios adapter", function () {
         return Object.assign({}, data);
       }
     );
-    const ctx = new Context().accumulate({ logger: Logging.get() });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const ctx = new Context().accumulate({
+      logger: Logging.for(expect.getState().currentTestName),
+      operation: OperationKeys.CREATE,
+      affectedTables: [],
+    });
     const created = await adapter.create(Test, id, record, ctx);
-    // expect(created).toBeDefined();
+    expect(created).toBeDefined();
     expect(postMock).toHaveBeenCalledTimes(1);
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${tableName}/id`,
       expect.objectContaining(record),
-      {}
+      expect.objectContaining({
+        headers: expect.any(Object),
+        logger: expect.any(Object),
+      })
     );
   });
 

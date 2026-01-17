@@ -145,7 +145,11 @@ export class AxiosHttpAdapter extends HttpAdapter<
     } catch (e: unknown) {
       // do nothing
     }
-    return this.client.request(Object.assign({}, details, overrides));
+
+    const response = await this.client.request(
+      Object.assign({}, details, overrides)
+    );
+    return response as V;
   }
 
   override parseResponse<M extends Model>(
@@ -202,13 +206,14 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return await this.client.post(
+      const result = await this.client.post(
         url,
         Object.assign({}, model, {
           [ModelKeys.ANCHOR]: tableName.name,
         }),
         cfg
       );
+      return result;
     } catch (e: any) {
       throw this.parseError(e);
     }

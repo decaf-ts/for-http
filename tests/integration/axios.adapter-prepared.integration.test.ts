@@ -1,6 +1,6 @@
 import { AxiosHttpAdapter } from "../../src/axios/axios";
 import type { HttpConfig } from "../../src/types";
-import { Context } from "@decaf-ts/core";
+import { Context, PreparedStatementKeys } from "@decaf-ts/core";
 import {
   OrderDirection,
   PersistenceKeys,
@@ -65,6 +65,8 @@ describe("AxiosHttpAdapter integration (no network)", () => {
   it("handles prepared statements", async () => {
     const ctx = new Context().accumulate({
       logger: Logging.for(expect.getState().currentTestName),
+      operation: PreparedStatementKeys.FIND_ONE_BY,
+      affectedTables: [],
     });
 
     const repo = Repository.forModel(TestModel);
@@ -137,6 +139,8 @@ describe("AxiosHttpAdapter integration (no network)", () => {
   it("handles paging via prepared statements using simple queries", async () => {
     const ctx = new Context().accumulate({
       logger: Logging.for(expect.getState().currentTestName),
+      operation: PreparedStatementKeys.PAGE_BY,
+      affectedTables: [TestModel],
     });
 
     const repo = Repository.forModel(TestModel);
@@ -176,6 +180,8 @@ describe("AxiosHttpAdapter integration (no network)", () => {
   it("handles paging via prepared statements using complex queries", async () => {
     const ctx = new Context().accumulate({
       logger: Logging.for(expect.getState().currentTestName),
+      operation: PreparedStatementKeys.PAGE_BY,
+      affectedTables: [TestModel],
     });
 
     const repo = Repository.forModel(TestModel);
