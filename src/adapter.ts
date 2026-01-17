@@ -1,23 +1,32 @@
 import {
+  AdapterFlags,
+  Condition,
+  UnsupportedError,
+  SequenceOptions,
+} from "@decaf-ts/core";
+import {
   Adapter,
   AuthorizationError,
-  Condition,
   ConnectionError,
-  Paginator,
   Context,
   ContextualArgs,
-  FlagsOf,
   ForbiddenError,
   MaybeContextualArg,
   MigrationError,
   ObserverError,
+  Paginator,
+  Statement,
   PagingError,
   PersistenceKeys,
+  prepared,
   PreparedModel,
-  QueryError,
-  Repository,
   PreparedStatement,
-  UnsupportedError,
+  QueryError,
+  QueryOptions,
+  Repository,
+  Sequence,
+  FlagsOf,
+  DefaultAdapterFlags,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
@@ -36,21 +45,13 @@ import {
   apply,
   Constructor,
   Decoration,
-  methodMetadata,
   Metadata,
+  methodMetadata,
 } from "@decaf-ts/decoration";
 import { RestService } from "./RestService";
-import {
-  prepared,
-  QueryOptions,
-  Statement,
-  SequenceOptions,
-  Sequence,
-} from "@decaf-ts/core";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
-import type { AdapterFlags } from "@decaf-ts/core";
 
 export function suffixMethod(
   obj: any,
@@ -149,14 +150,22 @@ export abstract class HttpAdapter<
   protected override async flags<M extends Model>(
     operation: OperationKeys | string,
     model: Constructor<M> | Constructor<M>[],
-    overrides: Partial<FlagsOf<C>>,
-    ...args: any[]
+    overrides: Partial<FlagsOf<C>>
   ): Promise<FlagsOf<C>> {
-    const flags = await super.flags(operation, model, overrides, ...args);
-    return Object.assign({}, flags, {
-      headers: flags.headers ?? {},
-    });
+    return super.flags(
+      operation,
+      model,
+      Object.assign(
+        {
+          headers: overrides.headers ?? {},
+        },
+        overrides
+      )
+    );
   }
+
+  protected override DefaultFlags: Partial<FlagsOf<C>> =
+    DefaultAdapterFlags as Partial<FlagsOf<C>>;
 
   /**
    * @description Returns the repository constructor for this adapter
@@ -564,18 +573,9 @@ export abstract class HttpAdapter<
                   args: any[]
                 ): Promise<any> {
                   const repo = thisArg as Repository<any, any>;
-
-                  const contextArgs = await Context.args<any, any>(
-                    propertyKey,
-                    repo.class,
-                    args,
-                    repo["adapter"],
-                    repo["_overrides"] || {}
-                  );
-                  const { log, ctxArgs } = repo["logCtx"](
-                    contextArgs.args,
-                    target
-                  );
+                  const { log, ctxArgs } = (
+                    await repo["logCtx"](args, OperationKeys.READ, true)
+                  ).for(prop);
                   log.verbose(`Running prepared statement ${target.name}`);
                   log.debug(`With args: ${JSON.stringify(args, null, 2)}`);
                   return (thisArg as Repository<any, any>).statement(
