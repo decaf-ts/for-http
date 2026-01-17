@@ -13,6 +13,7 @@ import {
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 import { HttpAdapter } from "./adapter";
+import { OperationKeys } from "@decaf-ts/db-decorators";
 
 /**
  * @description Repository for REST API interactions
@@ -177,8 +178,12 @@ export class RestRepository<
     const argList = ctxArgs.slice(0, -1);
     const lastArg = argList[argList.length - 1];
     const hasParams =
-      typeof lastArg === "object" && lastArg !== null && !Array.isArray(lastArg);
-    const params = hasParams ? (argList.pop() as Record<string, any>) : undefined;
+      typeof lastArg === "object" &&
+      lastArg !== null &&
+      !Array.isArray(lastArg);
+    const params = hasParams
+      ? (argList.pop() as Record<string, any>)
+      : undefined;
     const query: PreparedStatement<any> = {
       class: this.class,
       args: argList,
@@ -198,14 +203,17 @@ export class RestRepository<
     details: Q,
     ...args: MaybeContextualArg<ContextOf<A>>
   ): Promise<R> {
-    const contextArgs = await Context.args<M, any>(
-      "request",
-      this.class,
-      args,
-      this.adapter,
-      this._overrides || {}
-    );
-    const { ctxArgs } = this.logCtx(contextArgs.args, this.request);
+    let contextualizeArgs: any;
+
+    if (args.length && args[args.length - 1] instanceof Context) {
+      contextualizeArgs = this.logCtx(args, this.request);
+    } else {
+      contextualizeArgs = (
+        await this.logCtx(args, OperationKeys.READ, true)
+      ).for(this.request);
+    }
+    const { ctxArgs } = contextualizeArgs;
+
     return this.adapter.request<R>(details, ...ctxArgs);
   }
 }
