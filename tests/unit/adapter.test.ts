@@ -2,7 +2,7 @@ import { AxiosHttpAdapter } from "../../src/axios";
 import { Axios } from "axios";
 import { HttpAdapter } from "../../src";
 import { HttpConfig } from "../../src";
-import { Context, pk, PreparedStatementKeys } from "@decaf-ts/core";
+import { Context, pk } from "@decaf-ts/core";
 import { Logging } from "@decaf-ts/logging";
 import { Model, required } from "@decaf-ts/decorator-validation";
 import { OperationKeys } from "@decaf-ts/db-decorators";
@@ -70,10 +70,7 @@ describe("Axios adapter", function () {
     expect(postMock).toHaveBeenCalledWith(
       `${cfg.protocol}://${cfg.host}/${tableName}/id`,
       expect.objectContaining(record),
-      expect.objectContaining({
-        headers: expect.any(Object),
-        logger: expect.any(Object),
-      })
+      {}
     );
   });
 

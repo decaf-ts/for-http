@@ -167,17 +167,17 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case PreparedStatementKeys.FIND_BY:
       case PreparedStatementKeys.LIST_BY:
       case PreparedStatementKeys.PAGE_BY:
-        return res.body;
+        return res.body || res;
       case OperationKeys.CREATE:
       case OperationKeys.READ:
       case OperationKeys.UPDATE:
       case OperationKeys.DELETE:
-        return res.body;
+        return res.body || res;
       case PreparedStatementKeys.FIND_ONE_BY:
       case "statement":
-        return super.parseResponse(clazz, method, res.body);
+        return super.parseResponse(clazz, method, res.body || res);
       default:
-        return res.body;
+        return res.body || res;
     }
   }
 
