@@ -360,10 +360,12 @@ export class AxiosHttpAdapter extends HttpAdapter<
         {
           url,
           method: "PUT",
-          data: model.map((m: M) =>
-            Object.assign({}, m, {
-              [ModelKeys.ANCHOR]: tableName.name,
-            })
+          data: JSON.stringify(
+            model.map((m: M) =>
+              Object.assign({}, m, {
+                [ModelKeys.ANCHOR]: tableName.name,
+              })
+            )
           ),
           ...cfg,
         },
