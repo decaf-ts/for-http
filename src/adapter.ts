@@ -38,6 +38,7 @@ import {
   PrimaryKeyType,
   SerializationError,
   ValidationError,
+  wrapMethodWithContext,
 } from "@decaf-ts/db-decorators";
 import { HttpConfig, HttpFlags } from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
@@ -135,6 +136,18 @@ export abstract class HttpAdapter<
         method.name
       );
     });
+    wrapMethodWithContext(
+      this,
+      (...args: any[]) => args,
+      this.request,
+      (res: any, ctx: C) => {
+        const parsers = self.config.parsers;
+        if (!parsers) return res;
+        parsers.forEach((p) => p(res, ctx));
+        return res;
+      },
+      this.request.name
+    );
   }
 
   /**

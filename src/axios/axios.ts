@@ -5,13 +5,13 @@ import { AxiosFlags } from "./types";
 import {
   BaseError,
   BulkCrudOperationKeys,
+  InternalError,
   OperationKeys,
   PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
 import {
   Context,
   ContextualArgs,
-  MaybeContextualArg,
   PersistenceKeys,
   PreparedStatement,
   PreparedStatementKeys,
@@ -124,7 +124,6 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
     return req;
   }
-
   /**
    * @description Sends an HTTP request using Axios
    * @summary Implementation of the abstract request method from HttpAdapter.
@@ -135,7 +134,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
    */
   override async request<V>(
     details: AxiosRequestConfig,
-    ...args: MaybeContextualArg<Context<AxiosFlags>>
+    ...args: ContextualArgs<Context<AxiosFlags>>
   ): Promise<V> {
     let overrides = {};
     try {
@@ -157,6 +156,8 @@ export class AxiosHttpAdapter extends HttpAdapter<
     method: OperationKeys | string,
     res: any
   ): any {
+    if (!res.status && method !== PersistenceKeys.STATEMENT)
+      throw new InternalError("this should be impossible");
     if (res.status >= 400)
       throw this.parseError((res.error as Error) || (res.status as any));
     switch (method) {
@@ -164,20 +165,19 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case BulkCrudOperationKeys.READ_ALL:
       case BulkCrudOperationKeys.UPDATE_ALL:
       case BulkCrudOperationKeys.DELETE_ALL:
-      case PreparedStatementKeys.FIND_BY:
-      case PreparedStatementKeys.LIST_BY:
-      case PreparedStatementKeys.PAGE_BY:
-        return res.body || res;
       case OperationKeys.CREATE:
       case OperationKeys.READ:
       case OperationKeys.UPDATE:
       case OperationKeys.DELETE:
-        return res.body || res;
+        return res.body;
+      case PreparedStatementKeys.FIND_BY:
+      case PreparedStatementKeys.LIST_BY:
+      case PreparedStatementKeys.PAGE_BY:
       case PreparedStatementKeys.FIND_ONE_BY:
-      case "statement":
-        return super.parseResponse(clazz, method, res.body || res);
+      case PersistenceKeys.STATEMENT:
+        return super.parseResponse(clazz, method, res.body);
       default:
-        return res.body || res;
+        return res;
     }
   }
 
@@ -206,14 +206,20 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      const result = await this.client.post(
-        url,
-        Object.assign({}, model, {
-          [ModelKeys.ANCHOR]: tableName.name,
-        }),
-        cfg
+      const result = await this.request(
+        {
+          url,
+          method: "POST",
+          data: JSON.stringify(
+            Object.assign({}, model, {
+              [ModelKeys.ANCHOR]: tableName.name,
+            })
+          ),
+          ...cfg,
+        },
+        ctx
       );
-      return result;
+      return result as any;
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -232,14 +238,20 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.post(
-        url,
-        model.map((m: M) =>
-          Object.assign({}, m, {
-            [ModelKeys.ANCHOR]: clazz.name,
-          })
-        ),
-        cfg
+      return this.request(
+        {
+          url,
+          method: "POST",
+          data: JSON.stringify(
+            model.map((m: M) =>
+              Object.assign({}, m, {
+                [ModelKeys.ANCHOR]: clazz.name,
+              })
+            )
+          ),
+          ...cfg,
+        },
+        ctx
       );
     } catch (e: any) {
       throw this.parseError(e);
@@ -267,7 +279,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       );
       const cfg = this.toRequest(ctx);
       log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.client.get(url);
+      return await this.request({ url, method: "GET", ...cfg }, ctx);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -282,7 +294,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       const url = this.url(tableName, ["bulk"], { ids: ids } as any);
       const cfg = this.toRequest(ctx);
       log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.client.get(url);
+      return await this.request({ url, method: "GET", ...cfg }, ctx);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -313,11 +325,18 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.put(
-        url,
-        Object.assign({}, model, {
-          [ModelKeys.ANCHOR as keyof typeof model]: tableName.name,
-        })
+      return await this.request(
+        {
+          url,
+          method: "PUT",
+          data: JSON.stringify(
+            Object.assign({}, model, {
+              [ModelKeys.ANCHOR as keyof typeof model]: tableName.name,
+            })
+          ),
+          ...cfg,
+        },
+        ctx
       );
     } catch (e: any) {
       throw this.parseError(e);
@@ -337,13 +356,18 @@ export class AxiosHttpAdapter extends HttpAdapter<
       log.debug(
         `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
       );
-      return this.client.put(
-        url,
-        model.map((m: M) =>
-          Object.assign({}, m, {
-            [ModelKeys.ANCHOR]: tableName.name,
-          })
-        )
+      return this.request(
+        {
+          url,
+          method: "PUT",
+          data: model.map((m: M) =>
+            Object.assign({}, m, {
+              [ModelKeys.ANCHOR]: tableName.name,
+            })
+          ),
+          ...cfg,
+        },
+        ctx
       );
     } catch (e: any) {
       throw this.parseError(e);
@@ -371,7 +395,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       );
       const cfg = this.toRequest(ctx);
       log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.client.delete(url);
+      return await this.request({ url, method: "DELETE", ...cfg }, ctx);
     } catch (e: any) {
       throw this.parseError(e);
     }
@@ -387,7 +411,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       const url = this.url(tableName, ["bulk"], { ids: ids } as any);
       const cfg = this.toRequest(ctx);
       log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return this.client.delete(url);
+      return await this.request({ url, method: "DELETE", ...cfg }, ctx);
     } catch (e: any) {
       throw this.parseError(e);
     }

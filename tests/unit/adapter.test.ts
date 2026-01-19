@@ -20,18 +20,12 @@ describe("Axios adapter", function () {
     expect(adapter).toBeDefined();
   });
 
-  let getMock: any;
-  let postMock: any;
-  let putMock: any;
-  let deleteMock: any;
+  let requestMock: any;
 
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.client as Axios, "get");
-    postMock = jest.spyOn(adapter.client as Axios, "post");
-    putMock = jest.spyOn(adapter.client as Axios, "put");
-    deleteMock = jest.spyOn(adapter.client as Axios, "delete");
+    requestMock = jest.spyOn(adapter.client as Axios, "request");
   });
 
   class Test extends Model {
@@ -54,11 +48,14 @@ describe("Axios adapter", function () {
   };
 
   it("Properly invokes create", async function () {
-    postMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return Object.assign({}, data);
-      }
-    );
+    requestMock.mockImplementation(async (details: any) => ({
+      status: 200,
+      body: {
+        method: details.method,
+        url: details.url,
+        data: details.data,
+      },
+    }));
     const ctx = new Context().accumulate({
       logger: Logging.for(expect.getState().currentTestName),
       operation: OperationKeys.CREATE,
@@ -66,61 +63,81 @@ describe("Axios adapter", function () {
     });
     const created = await adapter.create(Test, id, record, ctx);
     expect(created).toBeDefined();
-    expect(postMock).toHaveBeenCalledTimes(1);
-    expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${tableName}/id`,
-      expect.objectContaining(record),
-      {}
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${tableName}/id`,
+        method: "POST",
+        data: expect.any(String),
+      })
     );
   });
 
   it("Properly invokes read", async function () {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getMock.mockImplementation(async (url: string) => {
-      return Object.assign({}, record);
-    });
+    requestMock.mockImplementation(async (details: any) => ({
+      status: 200,
+      body: {
+        method: details.method,
+        url: details.url,
+      },
+    }));
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const read = await adapter.read(Test, id, ctx);
     // expect(read).toBeDefined();
-    expect(getMock).toHaveBeenCalledTimes(1);
-    expect(getMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`)
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`),
+        method: "GET",
+      })
     );
   });
 
   it("Properly invokes update", async function () {
-    putMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return Object.assign({}, data);
-      }
-    );
+    requestMock.mockImplementation(async (details: any) => ({
+      status: 200,
+      body: {
+        method: details.method,
+        url: details.url,
+        data: details.data,
+      },
+    }));
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const updated = await adapter.update(Test, id, record, ctx);
     // expect(updated).toBeDefined();
-    expect(putMock).toHaveBeenCalledTimes(1);
-    expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${tableName}/${id}`,
-      expect.objectContaining(record)
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${tableName}/${id}`,
+        method: "PUT",
+        data: expect.stringContaining(`"name":"${record.name}"`),
+      })
     );
   });
 
   it("Properly invokes delete", async function () {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    deleteMock.mockImplementation(async (url: string) => {
-      return Object.assign({}, record);
-    });
+    requestMock.mockImplementation(async (details: any) => ({
+      status: 200,
+      body: {
+        method: details.method,
+        url: details.url,
+      },
+    }));
     const ctx = new Context().accumulate({ logger: Logging.get() });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const deleted = await adapter.delete(Test, id, ctx);
     // expect(deleted).toBeDefined();
-    expect(deleteMock).toHaveBeenCalledTimes(1);
-    expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`)
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: encodeURI(`${cfg.protocol}://${cfg.host}/${tableName}/${id}`),
+        method: "DELETE",
+      })
     );
   });
 });

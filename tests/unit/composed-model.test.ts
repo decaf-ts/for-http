@@ -2,7 +2,7 @@
 import { AxiosHttpAdapter } from "../../src/axios";
 import { HttpAdapter, HttpConfig } from "../../src";
 import { Axios } from "axios";
-import { createdAt, pk, Repository, updatedAt } from "@decaf-ts/core";
+import { Context, createdAt, pk, Repository, updatedAt } from "@decaf-ts/core";
 import {
   model,
   ModelArg,
@@ -57,18 +57,12 @@ describe("RestRepository", function () {
     repo = new RestRepository(adapter, ComposedTestModel);
   });
 
-  let getMock: any;
-  let postMock: any;
-  let putMock: any;
-  let deleteMock: any;
+  let requestMock: any;
 
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.client as Axios, "get");
-    postMock = jest.spyOn(adapter.client as Axios, "post");
-    putMock = jest.spyOn(adapter.client as Axios, "put");
-    deleteMock = jest.spyOn(adapter.client as Axios, "delete");
+    requestMock = jest.spyOn(adapter.client as Axios, "request");
   });
 
   const model: ComposedTestModel = new ComposedTestModel({
@@ -88,82 +82,80 @@ describe("RestRepository", function () {
   });
 
   it("creates", async function () {
-    postMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return {
-          status: 200,
-          body: new ComposedTestModel(
-            Object.assign({}, model, {
-              id: `${model.name}_${model.age}`,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })
-          ),
-        };
-      }
-    );
+    requestMock.mockImplementation(async (details: any, ...args: any[]) => {
+      return {
+        status: 200,
+        body: new ComposedTestModel(
+          Object.assign({}, model, {
+            id: `${model.name}_${model.age}`,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
+        ),
+      };
+    });
     created = await repo.create(model);
     expect(created).toBeDefined();
-    expect(postMock).toHaveBeenCalledTimes(1);
-    expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
-      expect.any(Object),
-      { headers: expect.any(Object) }
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
+        method: "POST",
+        data: expect.any(String),
+        headers: expect.any(Object),
+      })
     );
+
     expect(created).toBeInstanceOf(ComposedTestModel);
     expect(created.equals(model)).toBe(false);
     expect(created.equals(model, "createdAt", "updatedAt", "id")).toBe(true);
   });
 
   it("reads", async function () {
-    getMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: created };
-      }
-    );
+    requestMock.mockImplementation(async () => {
+      return { status: 200, body: created };
+    });
     const read = await repo.read(created.id);
     expect(read).toBeDefined();
-    expect(getMock).toHaveBeenCalledTimes(1);
-    expect(getMock).toHaveBeenCalledWith(
-      encodeURI(
-        `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${created.age}`
-      )
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: encodeURI(
+          `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${created.age}`
+        ),
+        method: "GET",
+      })
     );
     expect(read).toBeInstanceOf(ComposedTestModel);
     expect(read.equals(created)).toBe(true);
   });
 
   it("updates", async function () {
-    putMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: Object.assign({}, model, data) };
-      }
-    );
-    getMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return {
-          status: 200,
-          body: new ComposedTestModel(
-            Object.assign({}, created, {
-              updatedAt: new Date(),
-            })
-          ),
-        };
-      }
-    );
-
     const toUpdate = new ComposedTestModel(
       Object.assign({}, created, {
         address: "other",
       })
     );
+    requestMock.mockImplementation(async () => {
+      return {
+        status: 200,
+        body: new ComposedTestModel(
+          Object.assign({}, toUpdate, {
+            updatedAt: new Date(),
+          })
+        ),
+      };
+    });
 
     updated = await repo.update(toUpdate);
     expect(updated).toBeDefined();
-    expect(putMock).toHaveBeenCalledTimes(1);
-    expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
-      expect.objectContaining(updated)
+    expect(requestMock).toHaveBeenCalled();
+    expect(requestMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
+        method: "PUT",
+        data: expect.any(String),
+      })
     );
 
     expect(updated).toBeInstanceOf(ComposedTestModel);
@@ -172,23 +164,19 @@ describe("RestRepository", function () {
   });
 
   it("deletes", async function () {
-    deleteMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
-    getMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
+    requestMock.mockImplementation(async () => {
+      return { status: 200, body: model };
+    });
     const deleted = await repo.delete(created.id);
     expect(deleted).toBeDefined();
-    expect(deleteMock).toHaveBeenCalledTimes(1);
-    expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(
-        `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`
-      )
+    expect(requestMock).toHaveBeenCalled();
+    expect(requestMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: encodeURI(
+          `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`
+        ),
+        method: "DELETE",
+      })
     );
   });
 });

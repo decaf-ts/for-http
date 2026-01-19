@@ -26,9 +26,13 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       { request: async (d: any) => ({ ok: true, d }) },
       `axios-${Math.random()}`
     );
-    const res = await adapter.request<any>({
-      url: "https://example.com",
-    } as any);
+    const ctx = new Context().accumulate({ logger: Logging.get() });
+    const res = await adapter.request<any>(
+      {
+        url: "https://example.com",
+      } as any,
+      ctx
+    );
     expect(res.ok).toBe(true);
   });
 
@@ -45,22 +49,21 @@ describe("AxiosHttpAdapter integration (no network)", () => {
 
   test("CRUD methods call through to client and return value", async () => {
     const client = {
-      post: async (url: string, body: any) => ({
-        status: 200,
-        body: { method: "post", url, body },
-      }),
-      get: async (url: string) => ({
-        status: 200,
-        body: { method: "get", url },
-      }),
-      put: async (url: string, body: any) => ({
-        status: 200,
-        body: { method: "put", url, body },
-      }),
-      delete: async (url: string) => ({
-        status: 200,
-        body: { method: "delete", url },
-      }),
+      request: async (details: any) => {
+        const method = (details.method || "GET").toLowerCase();
+        let payload: any = undefined;
+        if (details.data) {
+          try {
+            payload = JSON.parse(details.data);
+          } catch {
+            payload = details.data;
+          }
+        }
+        return {
+          status: 200,
+          body: { method, url: details.url, body: payload },
+        };
+      },
     };
     const adapter = new TestAxiosAdapter(
       config,
@@ -95,16 +98,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
   test("CRUD methods throw parsed error when client fails", async () => {
     const boom = new Error("boom");
     const failingClient = {
-      post: async () => {
-        throw boom;
-      },
-      get: async () => {
-        throw boom;
-      },
-      put: async () => {
-        throw boom;
-      },
-      delete: async () => {
+      request: async () => {
         throw boom;
       },
     };
@@ -113,8 +107,8 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     await expect(adapter.create(Users, 1, new Users(), ctx)).rejects.toThrow(
       InternalError
     );
-    await expect(adapter.read(Users, 1, ctx)).rejects.toThrow(boom);
-    await expect(adapter.update(Users, 1, {}, ctx)).rejects.toThrow(boom);
-    await expect(adapter.delete(Users, 1, ctx)).rejects.toThrow(boom);
+    await expect(adapter.read(Users, 1, ctx)).rejects.toThrow(InternalError);
+    await expect(adapter.update(Users, 1, {}, ctx)).rejects.toThrow(InternalError);
+    await expect(adapter.delete(Users, 1, ctx)).rejects.toThrow(InternalError);
   });
 });

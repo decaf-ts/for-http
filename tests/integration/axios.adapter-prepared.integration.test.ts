@@ -30,12 +30,10 @@ class TestAxiosAdapter extends AxiosHttpAdapter {
 const config: HttpConfig = { protocol: "https", host: "example.com" };
 
 const client = {
-  post: async (url: string, body: any) => ({ method: "post", url, body }),
-  get: async (url: string) => ({ method: "get", url }),
-  put: async (url: string, body: any) => ({ method: "put", url, body }),
-  delete: async (url: string) => ({ method: "delete", url }),
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  request: async (opts: any, ctx: any) => opts,
+  request: async (opts: any, ctx: any) => ({
+    status: 200,
+  }),
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

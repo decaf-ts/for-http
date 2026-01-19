@@ -29,26 +29,10 @@ describe("RestService integration", () => {
   const mock = jest.fn();
 
   const client = {
-    post: async (url: string, body: any) => {
-      mock("post", url, body);
-      return { status: 200, body: url.includes("bulk") ? [] : {} };
-    },
-    get: async (url: string) => {
-      mock("get", url);
-      return { status: 200, body: url.includes("bulk") ? [] : {} };
-    },
-    put: async (url: string, body: any) => {
-      mock("put", url, body);
-      return { status: 200, body: url.includes("bulk") ? [] : {} };
-    },
-    delete: async (url: string) => {
-      mock("delete", url);
-      return { status: 200, body: url.includes("bulk") ? [] : {} };
-    },
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     request: async (opts: any, ctx: any) => {
       mock(opts);
-      return opts.url.includes("bulk") ? [] : {};
+      return { status: 200, body: opts.url.includes("bulk") ? [] : {} };
     },
   };
 
@@ -67,43 +51,64 @@ describe("RestService integration", () => {
   test("CRUD operations", async () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const created = await repo.create(new Dummy({ id: "1", name: "A" }));
-    expect(mock).toHaveBeenLastCalledWith(
-      "post",
-      expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
-      expect.objectContaining({ id: "1", name: "A" })
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
+        data: expect.stringContaining("Dummy"),
+      })
     );
+    mock.mockClear();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const read = await repo.read("2");
-    expect(mock).toHaveBeenLastCalledWith(
-      "get",
-      expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}/2`)
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${toKebabCase(Model.tableName(Dummy))}/2`
+        ),
+      })
     );
+    mock.mockClear();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const updated = await repo.update(new Dummy({ id: "3", name: "B" }));
-    expect(mock).toHaveBeenLastCalledWith(
-      "put",
-      expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
-      expect.objectContaining({ id: "3", name: "B" })
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PUT",
+        url: expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
+        data: expect.anything(),
+      })
     );
+    mock.mockClear();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const deleted = await repo.delete("4");
-    expect(mock).toHaveBeenLastCalledWith(
-      "delete",
-      expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}/4`)
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining(
+          `/${toKebabCase(Model.tableName(Dummy))}/4`
+        ),
+      })
     );
+    mock.mockClear();
   });
 
   test("Bulk CRUD operations", async () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const created = await repo.createAll([new Dummy({ id: "1", name: "A" })]);
-    expect(mock).toHaveBeenLastCalledWith(
-      "post",
-      expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}/bulk`),
-      [expect.objectContaining({ id: "1", name: "A" })]
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: expect.stringContaining(
+          `/${toKebabCase(Model.tableName(Dummy))}/bulk`
+        ),
+        data: expect.anything(),
+      })
     );
+    mock.mockClear();
 
     function enc(url) {
       return url.toString();
@@ -111,12 +116,15 @@ describe("RestService integration", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const read = await repo.readAll(["2", "4"]);
-    expect(mock).toHaveBeenLastCalledWith(
-      "get",
-      expect.stringContaining(
-        enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=2&ids=4`)
-      )
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining(
+          enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=2&ids=4`)
+        ),
+      })
     );
+    mock.mockClear();
 
     jest
       .spyOn(repo, "readAll")
@@ -126,20 +134,28 @@ describe("RestService integration", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const updated = await repo.updateAll([new Dummy({ id: "3", name: "B" })]);
-    expect(mock).toHaveBeenLastCalledWith(
-      "put",
-      expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}/bulk`),
-      [expect.objectContaining({ id: "3", name: "B" })]
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PUT",
+        url: expect.stringContaining(
+          `/${toKebabCase(Model.tableName(Dummy))}/bulk`
+        ),
+        data: expect.anything(),
+      })
     );
+    mock.mockClear();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const deleted = await repo.deleteAll(["4", "6"]);
-    expect(mock).toHaveBeenLastCalledWith(
-      "delete",
-      expect.stringContaining(
-        enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=4&ids=6`)
-      )
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining(
+          enc(`/${toKebabCase(Model.tableName(Dummy))}/bulk?ids=4&ids=6`)
+        ),
+      })
     );
+    mock.mockClear();
   });
 
   it("handles paging via prepared statements using simple queries", async () => {

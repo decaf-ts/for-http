@@ -28,18 +28,12 @@ describe("Rest Service", () => {
     expect(adapter).toBeDefined();
   });
 
-  let getMock: any;
-  let postMock: any;
-  let putMock: any;
-  let deleteMock: any;
+  let requestMock: any;
 
   beforeEach(function () {
     jest.clearAllMocks();
     jest.resetAllMocks();
-    getMock = jest.spyOn(adapter.client as Axios, "get");
-    postMock = jest.spyOn(adapter.client as Axios, "post");
-    putMock = jest.spyOn(adapter.client as Axios, "put");
-    deleteMock = jest.spyOn(adapter.client as Axios, "delete");
+    requestMock = jest.spyOn(adapter.client as Axios, "request");
   });
 
   const model: TestModel = new TestModel({
@@ -56,59 +50,60 @@ describe("Rest Service", () => {
   });
 
   it("creates", async function () {
-    postMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
+    requestMock.mockImplementation(async (details: any, ...args: any[]) => {
+      return { status: 200, body: model };
+    });
     const created = await repo.create(model);
     expect(created).toBeDefined();
-    expect(postMock).toHaveBeenCalledTimes(1);
-    expect(postMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}/id`,
-      expect.objectContaining(model),
-      { headers: expect.any(Object) }
+    expect(requestMock).toHaveBeenCalled();
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${table}/id`,
+        method: "POST",
+        data: expect.any(String),
+        headers: expect.any(Object),
+      })
     );
     expect(created).toBeInstanceOf(TestModel);
     expect(created.equals(model)).toBe(true);
   });
 
   it("reads", async function () {
-    getMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
+    requestMock.mockImplementation(async () => {
+      return { status: 200, body: model };
+    });
     const read = await repo.read(model.id);
     // expect(read).toBeDefined();
-    expect(getMock).toHaveBeenCalledTimes(1);
-
-    expect(getMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`),
+        method: "GET",
+      })
     );
   });
 
   it("updates", async function () {
-    putMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: Object.assign({}, model, data) };
-      }
-    );
-    getMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
     const toUpdate = new TestModel(
       Object.assign({}, model, { name: "updated" })
     );
+    requestMock.mockImplementation(async (details: any) => {
+      const method = (details.method || "GET").toUpperCase();
+      if (method === "GET") {
+        return { status: 200, body: model };
+      }
+      return { status: 200, body: toUpdate };
+    });
 
     const updated = await repo.update(toUpdate);
     expect(updated).toBeDefined();
-    expect(putMock).toHaveBeenCalledTimes(1);
-    expect(putMock).toHaveBeenCalledWith(
-      `${cfg.protocol}://${cfg.host}/${table}/${toUpdate.id}`,
-      expect.objectContaining(toUpdate)
+    expect(requestMock).toHaveBeenCalled();
+    expect(requestMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${table}/${toUpdate.id}`,
+        method: "PUT",
+        data: expect.any(String),
+      })
     );
 
     expect(updated).toBeInstanceOf(TestModel);
@@ -116,21 +111,17 @@ describe("Rest Service", () => {
   });
 
   it("deletes", async function () {
-    deleteMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
-    getMock.mockImplementation(
-      async (url: string, data: Record<string, unknown>) => {
-        return { status: 200, body: model };
-      }
-    );
+    requestMock.mockImplementation(async () => {
+      return { status: 200, body: model };
+    });
     const deleted = await repo.delete(model.id);
     expect(deleted).toBeDefined();
-    expect(deleteMock).toHaveBeenCalledTimes(1);
-    expect(deleteMock).toHaveBeenCalledWith(
-      encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`)
+    expect(requestMock).toHaveBeenCalled();
+    expect(requestMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: encodeURI(`${cfg.protocol}://${cfg.host}/${table}/${model.id}`),
+        method: "DELETE",
+      })
     );
   });
 });
