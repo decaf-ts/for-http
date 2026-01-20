@@ -26,7 +26,6 @@ import {
   Repository,
   Sequence,
   FlagsOf,
-  DefaultAdapterFlags,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
@@ -176,9 +175,6 @@ export abstract class HttpAdapter<
       )
     );
   }
-
-  protected override DefaultFlags: Partial<FlagsOf<C>> =
-    DefaultAdapterFlags as Partial<FlagsOf<C>>;
 
   /**
    * @description Returns the repository constructor for this adapter
