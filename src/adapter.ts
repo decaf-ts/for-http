@@ -53,6 +53,7 @@ import { RestService } from "./RestService";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
+import { HttpDispatcher } from "./HttpDispatcher";
 
 export function suffixMethod(
   obj: any,
@@ -179,6 +180,10 @@ export abstract class HttpAdapter<
 
   protected override DefaultFlags: Partial<FlagsOf<C>> =
     DefaultAdapterFlags as Partial<FlagsOf<C>>;
+
+  protected override Dispatch(): any {
+    return new HttpDispatcher();
+  }
 
   /**
    * @description Returns the repository constructor for this adapter
