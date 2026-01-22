@@ -1,21 +1,17 @@
 import {
-  AdapterFlags,
-  Condition,
-  UnsupportedError,
-  SequenceOptions,
-} from "@decaf-ts/core";
-import {
   Adapter,
+  AdapterFlags,
   AuthorizationError,
+  Condition,
   ConnectionError,
   Context,
   ContextualArgs,
+  FlagsOf,
   ForbiddenError,
   MaybeContextualArg,
   MigrationError,
   ObserverError,
   Paginator,
-  Statement,
   PagingError,
   PersistenceKeys,
   prepared,
@@ -25,8 +21,9 @@ import {
   QueryOptions,
   Repository,
   Sequence,
-  FlagsOf,
-  DefaultAdapterFlags,
+  SequenceOptions,
+  Statement,
+  UnsupportedError,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
@@ -177,9 +174,6 @@ export abstract class HttpAdapter<
       )
     );
   }
-
-  protected override DefaultFlags: Partial<FlagsOf<C>> =
-    DefaultAdapterFlags as Partial<FlagsOf<C>>;
 
   protected override Dispatch(): any {
     return new HttpDispatcher();
