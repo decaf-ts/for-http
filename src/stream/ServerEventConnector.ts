@@ -1,5 +1,6 @@
 import { EventHandlers, ServerEvent } from "./types";
 import { EventSource } from "eventsource";
+import { Serialization } from "@decaf-ts/decorator-validation";
 
 export class ServerEventConnector {
   private static readonly cache = new Map<string, ServerEventConnector>();
@@ -25,8 +26,13 @@ export class ServerEventConnector {
       const data = typeof raw === "string" ? JSON.parse(raw) : raw;
       if (!Array.isArray(data) || data.length < 3) return null;
 
-      const [eventName, operationKey, objectId, payload] = data;
+      const [eventName, operationKey, objectId, rawPayload] = data;
       if (typeof eventName !== "string") return null;
+
+      const payload =
+        typeof rawPayload === "string"
+          ? Serialization.deserialize(rawPayload)
+          : rawPayload;
 
       return [eventName, String(operationKey), objectId, payload] as const;
     } catch {
@@ -64,6 +70,7 @@ export class ServerEventConnector {
       this.es = undefined;
       this.listeners.clear();
       ServerEventConnector.cache.delete(this.url);
+      console.log(`EventSource close for ${this.url}`);
     }
   }
 
@@ -92,6 +99,10 @@ export class ServerEventConnector {
       if (!event) return;
       handlers.onEvent(event);
     };
+
+    setInterval(() => {
+      this.close();
+    }, 30000);
   }
 
   private addListener(handlers: EventHandlers): void {

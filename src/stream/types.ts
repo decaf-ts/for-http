@@ -1,7 +1,7 @@
 import { BulkCrudOperationKeys, OperationKeys } from "@decaf-ts/db-decorators";
 
 export type ServerEvent = readonly [
-  eventId: string,
+  modelName: string,
   operation: OperationKeys | BulkCrudOperationKeys | string,
   id: string,
   payload: any,
