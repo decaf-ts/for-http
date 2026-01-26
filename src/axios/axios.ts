@@ -176,6 +176,30 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case PreparedStatementKeys.FIND_ONE_BY:
       case PersistenceKeys.STATEMENT:
         return super.parseResponse(clazz, method, res.body);
+      case PreparedStatementKeys.COUNT_OF:
+      case PreparedStatementKeys.MAX_OF:
+      case PreparedStatementKeys.MIN_OF:
+      case PreparedStatementKeys.AVG_OF:
+      case PreparedStatementKeys.SUM_OF:
+        // These return primitive values, no need to parse as models
+        return res.body;
+      case PreparedStatementKeys.DISTINCT_OF:
+        // Returns an array of primitive values
+        return res.body;
+      case PreparedStatementKeys.GROUP_OF:
+        // Returns a Record<string, M[]>, need to parse each group's models
+        if (clazz && typeof res.body === "object" && res.body !== null) {
+          const result: Record<string, M[]> = {};
+          for (const [key, value] of Object.entries(res.body)) {
+            if (Array.isArray(value)) {
+              result[key] = value.map((d: any) => new clazz(d));
+            } else {
+              result[key] = value as M[];
+            }
+          }
+          return result;
+        }
+        return res.body;
       default:
         return res;
     }

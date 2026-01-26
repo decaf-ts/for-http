@@ -1,13 +1,16 @@
 import {
   Context,
-  ContextOf,
   DirectionLimitOffset,
-  MaybeContextualArg,
   OrderDirection,
   PersistenceKeys,
+  prepared,
   PreparedStatement,
   PreparedStatementKeys,
   Repository,
+} from "@decaf-ts/core";
+import type {
+  ContextOf,
+  MaybeContextualArg,
   SerializedPage,
 } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
@@ -215,5 +218,108 @@ export class RestRepository<
     const { ctxArgs } = contextualizeArgs;
 
     return this.adapter.request<R>(details, ...ctxArgs);
+  }
+
+  @prepared()
+  override async countOf(
+    key?: keyof M,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<number> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.COUNT_OF, true)
+    ).for(this.countOf);
+    log.verbose(
+      `counting ${Model.tableName(this.class)}${key ? ` by ${key as string}` : ""}`
+    );
+    const stmtArgs: any[] = key ? [key, {}] : [{}];
+    return (await this.statement(
+      this.countOf.name,
+      ...stmtArgs,
+      ...ctxArgs
+    )) as any;
+  }
+
+  @prepared()
+  override async maxOf<K extends keyof M>(
+    key: K,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[K]> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.MAX_OF, true)
+    ).for(this.maxOf);
+    log.verbose(`finding max of ${key as string} in ${Model.tableName(this.class)}`);
+    return (await this.statement(this.maxOf.name, key, {}, ...ctxArgs)) as any;
+  }
+
+  @prepared()
+  override async minOf<K extends keyof M>(
+    key: K,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[K]> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.MIN_OF, true)
+    ).for(this.minOf);
+    log.verbose(`finding min of ${key as string} in ${Model.tableName(this.class)}`);
+    return (await this.statement(this.minOf.name, key, {}, ...ctxArgs)) as any;
+  }
+
+  @prepared()
+  override async avgOf<K extends keyof M>(
+    key: K,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<number> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.AVG_OF, true)
+    ).for(this.avgOf);
+    log.verbose(`calculating avg of ${key as string} in ${Model.tableName(this.class)}`);
+    return (await this.statement(this.avgOf.name, key, {}, ...ctxArgs)) as any;
+  }
+
+  @prepared()
+  override async sumOf<K extends keyof M>(
+    key: K,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<number> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.SUM_OF, true)
+    ).for(this.sumOf);
+    log.verbose(`calculating sum of ${key as string} in ${Model.tableName(this.class)}`);
+    return (await this.statement(this.sumOf.name, key, {}, ...ctxArgs)) as any;
+  }
+
+  @prepared()
+  override async distinctOf<K extends keyof M>(
+    key: K,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[K][]> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.DISTINCT_OF, true)
+    ).for(this.distinctOf);
+    log.verbose(
+      `finding distinct values of ${key as string} in ${Model.tableName(this.class)}`
+    );
+    return (await this.statement(
+      this.distinctOf.name,
+      key,
+      {},
+      ...ctxArgs
+    )) as any;
+  }
+
+  @prepared()
+  override async groupOf<K extends keyof M>(
+    key: K,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<Record<string, M[]>> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.GROUP_OF, true)
+    ).for(this.groupOf);
+    log.verbose(`grouping ${Model.tableName(this.class)} by ${key as string}`);
+    return (await this.statement(
+      this.groupOf.name,
+      key,
+      {},
+      ...ctxArgs
+    )) as any;
   }
 }
