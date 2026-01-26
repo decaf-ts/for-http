@@ -91,6 +91,7 @@
     "@decaf-ts/injectable-decorators": "latest",
     "@decaf-ts/logging": "latest",
     "@decaf-ts/transactional-decorators": "latest",
-    "axios": "^1.13.2"
+    "axios": "^1.13.2",
+    "event-source-plus": "^0.1.15"
   }
 }

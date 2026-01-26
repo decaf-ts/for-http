@@ -1,21 +1,17 @@
 import {
-  AdapterFlags,
-  Condition,
-  UnsupportedError,
-  SequenceOptions,
-} from "@decaf-ts/core";
-import {
   Adapter,
+  AdapterFlags,
   AuthorizationError,
+  Condition,
   ConnectionError,
   Context,
   ContextualArgs,
+  FlagsOf,
   ForbiddenError,
   MaybeContextualArg,
   MigrationError,
   ObserverError,
   Paginator,
-  Statement,
   PagingError,
   PersistenceKeys,
   prepared,
@@ -25,7 +21,9 @@ import {
   QueryOptions,
   Repository,
   Sequence,
-  FlagsOf,
+  SequenceOptions,
+  Statement,
+  UnsupportedError,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
@@ -52,6 +50,7 @@ import { RestService } from "./RestService";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
+import { HttpDispatcher } from "./HttpDispatcher";
 
 export function suffixMethod(
   obj: any,
@@ -174,6 +173,10 @@ export abstract class HttpAdapter<
         overrides
       )
     );
+  }
+
+  protected override Dispatch(): any {
+    return new HttpDispatcher();
   }
 
   /**
