@@ -92,6 +92,6 @@
     "@decaf-ts/logging": "latest",
     "@decaf-ts/transactional-decorators": "latest",
     "axios": "^1.13.2",
-    "eventsource": "^4.1.0"
+    "event-source-plus": "^0.1.15"
   }
 }

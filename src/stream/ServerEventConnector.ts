@@ -1,5 +1,5 @@
 import { EventHandlers, ServerEvent } from "./types";
-import { EventSource } from "eventsource";
+import { EventSourcePlus } from "event-source-plus";
 import { Serialization } from "@decaf-ts/decorator-validation";
 
 export class ServerEventConnector {
@@ -40,18 +40,14 @@ export class ServerEventConnector {
     }
   }
 
-  /**
-   * Shared connection state (cached singleton instance).
-   */
-  private es?: EventSource;
+  /** Shared connection state (cached singleton instance). */
+  private es?: EventSourcePlus;
+  private controller?: { abort: () => void };
+
   private listeners: Set<EventHandlers> = new Set();
 
   constructor(private readonly url: string) {}
 
-  /**
-   * Returns whether this client instance is currently attached to the shared connection.
-   * A shared connection may exist even if this specific instance is not open.
-   */
   isOpen(): boolean {
     return this.es !== undefined;
   }
@@ -63,14 +59,13 @@ export class ServerEventConnector {
 
     // Close and drop from cache.
     try {
-      this.es?.close();
-    } catch {
-      // do nothing
+      this.controller?.abort();
     } finally {
+      this.controller = undefined;
       this.es = undefined;
       this.listeners.clear();
       ServerEventConnector.cache.delete(this.url);
-      console.log(`EventSource close for ${this.url}`);
+      console.log(`EventSourcePlus close for ${this.url}`);
     }
   }
 
@@ -78,27 +73,44 @@ export class ServerEventConnector {
    * Increments refCount and ensures EventSource is created.
    * This method must be called only on the shared singleton instance.
    */
-  startListening(handlers: EventHandlers): void {
+  startListening(
+    handlers: EventHandlers,
+    headers?:
+      | Record<string, string>
+      | (() => Record<string, string> | Promise<Record<string, string>>)
+  ): void {
     if (this.es) return; // already listening. TODO: Add log
 
-    const url = "http://127.0.0.1:3000/events";
-    this.es = new EventSource(url, { withCredentials: true });
+    const url = this.url;
 
-    this.es.onopen = () => {
-      console.log("EventSource connected");
-    };
+    this.es = new EventSourcePlus(url, {
+      headers,
+      credentials: "include",
+    });
 
-    this.es!.onerror = (err: any) => {
-      console.log("EventSource error:", err);
-      // EventSource retries automatically by default. We intentionally do not throw.
-      handlers.onError(err.message);
-    };
+    this.controller = this.es.listen({
+      onResponse: () => {
+        console.log("EventSourcePlus connected");
+      },
+      onRequestError: ({ error }) => {
+        console.log("EventSourcePlus request error:", error);
+        handlers.onError(String((error as any)?.message ?? error));
+      },
+      onResponseError: ({ response }) => {
+        console.log("EventSourcePlus response error:", response);
+        handlers.onError(`HTTP ${response.status}`);
+      },
+      onMessage: (message: any) => {
+        const raw =
+          message && typeof message === "object" && "data" in message
+            ? message.data
+            : message;
 
-    this.es!.onmessage = (ev: MessageEvent) => {
-      const event = ServerEventConnector.parseReceivedEvent(ev.data);
-      if (!event) return;
-      handlers.onEvent(event);
-    };
+        const event = ServerEventConnector.parseReceivedEvent(raw);
+        if (!event) return;
+        handlers.onEvent(event);
+      },
+    });
 
     setInterval(() => {
       this.close();
