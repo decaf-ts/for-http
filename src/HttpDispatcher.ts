@@ -7,7 +7,7 @@ import {
   PersistenceKeys,
   PreparedStatement,
 } from "@decaf-ts/core";
-import { ServerEvent, ServerEventConnector } from "./stream";
+import { ServerEvent, ServerEventConnector } from "./event";
 import { HttpConfig, HttpFlags } from "./types";
 
 export class HttpDispatcher extends Dispatch<
@@ -68,8 +68,7 @@ export class HttpDispatcher extends Dispatch<
     this.connector.startListening({
       onEvent: async (event: ServerEvent) => {
         const [tableName, operation, id, ...args] = event;
-
-        const { ctxArgs } = (await this.logCtx(args, operation, true)).for(
+        const { log, ctxArgs } = (await this.logCtx(args, operation, true)).for(
           "onEvent"
         );
 
@@ -80,9 +79,9 @@ export class HttpDispatcher extends Dispatch<
             id,
             ...(ctxArgs as [...any[], Context<HttpFlags>])
           )
-          .catch((e) => this.log.error(`Failed to dispatch SSE event`, e));
+          .catch((e) => log.error(`Failed to dispatch SSE event`, e));
       },
-      onError: (e: any) => console.error(e),
+      onError: (e: any) => log.error(e),
     });
 
     this.listening = true;

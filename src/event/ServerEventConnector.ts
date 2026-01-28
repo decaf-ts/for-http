@@ -21,6 +21,13 @@ export class ServerEventConnector {
     return this.cache.get(url) as ServerEventConnector;
   }
 
+  static close(url: string): void {
+    if (this.cache.has(url)) {
+      const connector = this.cache.get(url) as ServerEventConnector;
+      connector.close();
+    }
+  }
+
   private static parseReceivedEvent(raw: unknown): ServerEvent | null {
     try {
       const data = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -112,9 +119,9 @@ export class ServerEventConnector {
       },
     });
 
-    setInterval(() => {
-      this.close();
-    }, 30000);
+    // setInterval(() => {
+    //   this.close();
+    // }, 30000);
   }
 
   private addListener(handlers: EventHandlers): void {

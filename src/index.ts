@@ -16,6 +16,7 @@ export * from "./HttpStatement";
 export * from "./RestRepository";
 export * from "./RestService";
 export * from "./types";
+export * from "./event";
 
 /**
  * @description Current version of the for-http module
