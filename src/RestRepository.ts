@@ -3,6 +3,7 @@ import {
   DirectionLimitOffset,
   OrderDirection,
   PersistenceKeys,
+  Paginator,
   prepared,
   PreparedStatement,
   PreparedStatementKeys,
@@ -171,6 +172,51 @@ export class RestRepository<
     )) as any;
   }
 
+  @prepared()
+  override async find(
+    value: string,
+    order: OrderDirection = OrderDirection.ASC,
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<M[]> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.FIND, true)
+    ).for(this.find);
+    log.verbose(
+      `finding ${Model.tableName(this.class)} by default query attributes`
+    );
+    return (await this.statement(
+      this.find.name,
+      value,
+      order,
+      ...ctxArgs
+    )) as any;
+  }
+
+  @prepared()
+  override async page(
+    value: string,
+    direction: OrderDirection = OrderDirection.ASC,
+    ref: Omit<DirectionLimitOffset, "direction"> = {
+      offset: 1,
+      limit: 10,
+    },
+    ...args: MaybeContextualArg<ContextOf<A>>
+  ): Promise<SerializedPage<M>> {
+    const { log, ctxArgs } = (
+      await this.logCtx(args, PreparedStatementKeys.PAGE, true)
+    ).for(this.page);
+    log.verbose(
+      `paging ${Model.tableName(this.class)} by default query attributes`
+    );
+    return (await this.statement(
+      this.page.name,
+      value,
+      direction,
+      ref,
+      ...ctxArgs
+    )) as any;
+  }
+
   override async statement(
     name: string,
     ...args: MaybeContextualArg<ContextOf<A>>
@@ -195,11 +241,91 @@ export class RestRepository<
     } as PreparedStatement<any>;
     const req = this.adapter.toRequest(query, ctx);
     log.verbose(`Executing prepared statement ${name}`);
-    return this.adapter.parseResponse(
+    const response = await this.request(req, ...ctxArgs);
+    const parsed = this.adapter.parseResponse(
       this.class,
       name,
-      await this.request(req, ...ctxArgs)
+      response
     );
+    return this.convertStatementResult(name, parsed, ctx);
+  }
+
+  private convertStatementResult(
+    name: string,
+    result: any,
+    ctx: ContextOf<A>
+  ) {
+    if (!result) return result;
+
+    if (
+      name === PreparedStatementKeys.FIND ||
+      name === PreparedStatementKeys.LIST_BY ||
+      name === PreparedStatementKeys.FIND_BY
+    ) {
+      return Array.isArray(result)
+        ? result.map((record) => this.revertRecord(record, ctx))
+        : result;
+    }
+
+    if (name === PreparedStatementKeys.FIND_ONE_BY) {
+      return this.revertRecord(result, ctx);
+    }
+
+    if (
+      name === PreparedStatementKeys.PAGE ||
+      name === PreparedStatementKeys.PAGE_BY
+    ) {
+      return this.convertPageResult(result, ctx);
+    }
+
+    return result;
+  }
+
+  private convertPageResult(
+    page: string | SerializedPage<M>,
+    ctx: ContextOf<A>
+  ): string | SerializedPage<M> {
+    if (!page) return page;
+
+    let serialization: SerializedPage<M> | string = page;
+    if (typeof serialization === "string") {
+      try {
+        serialization = Paginator.deserialize<M>(serialization);
+      } catch {
+        return page;
+      }
+    }
+
+    if (Paginator.isSerializedPage(serialization)) {
+      return {
+        ...serialization,
+        data: serialization.data.map((record) =>
+          this.revertRecord(record, ctx)
+        ),
+      };
+    }
+
+    return page;
+  }
+
+  private revertRecord(record: any, ctx: ContextOf<A>): M {
+    if (!record) return record;
+    if (record instanceof this.class) return record;
+
+    const pkAttr = Model.pk(this.class);
+    const pkKey = Model.columnName(this.class, pkAttr as keyof M);
+    const fallback = (pkAttr as string) ?? pkKey;
+    const id = record[pkKey] ?? record[fallback];
+
+    if (typeof id !== "undefined") {
+      try {
+        return this.adapter.revert(record, this.class, id, undefined, ctx);
+      } catch {
+        // continue to fallback
+      }
+    }
+
+    return Object.assign(new this.class(), record);
   }
 
   async request<R>(

@@ -170,6 +170,8 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case OperationKeys.UPDATE:
       case OperationKeys.DELETE:
         return res.body;
+      case PreparedStatementKeys.FIND:
+      case PreparedStatementKeys.PAGE:
       case PreparedStatementKeys.FIND_BY:
       case PreparedStatementKeys.LIST_BY:
       case PreparedStatementKeys.PAGE_BY:
