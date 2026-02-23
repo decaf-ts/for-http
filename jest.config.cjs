@@ -1,22 +1,21 @@
-import { Config } from "@jest/types";
-
-const config: Config.InitialOptions = {
+const config = {
   verbose: true,
+  // eslint-disable-next-line no-undef
   rootDir: __dirname,
-  preset: 'ts-jest/presets/default-esm',
+  preset: "ts-jest/presets/default-esm",
   transform: {
-    '^.+\\.(ts|tsx)$': [
-      'ts-jest',
+    "^.+\\.(ts|tsx)$": [
+      "ts-jest",
       {
         useESM: true,
         tsconfig: {
-          module: 'ESNext',
-          target: 'ES2020',
+          module: "ESNext",
+          target: "ES2020",
         },
       },
     ],
   },
-  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  extensionsToTreatAsEsm: [".ts", ".tsx"],
   testEnvironment: "node",
   testRegex: "/tests/.*\\.(test|spec)\\.(ts|tsx)$",
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
@@ -25,9 +24,10 @@ const config: Config.InitialOptions = {
   collectCoverageFrom: ["src/**/*.{js,jsx,ts,tsx}", "!src/**/cli.ts"],
   reporters: ["default"],
   moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
+    "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   transformIgnorePatterns: [],
 };
 
-export default config;
+// eslint-disable-next-line no-undef
+module.exports = config;
