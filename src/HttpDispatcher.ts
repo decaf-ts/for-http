@@ -90,7 +90,10 @@ export class HttpDispatcher extends Dispatch<
     );
   }
 
-  override async close(): Promise<void> {
+  override async close(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ...args: ContextualArgs<Context<HttpFlags>>
+  ): Promise<void> {
     this.connector?.close();
   }
 }

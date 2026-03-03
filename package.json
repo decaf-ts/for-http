@@ -96,7 +96,8 @@
     "event-source-plus": "^0.1.15"
   },
   "overrides": {
-    "minimatch": "^10.2.2",
-    "test-exclude": "7.0.1"
+    "minimatch": "^10.2.3",
+    "test-exclude": "^7.0.1",
+    "serialize-javascript": "^7.0.1"
   }
 }
