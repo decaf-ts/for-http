@@ -160,6 +160,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       throw new InternalError("this should be impossible");
     if (res.status >= 400)
       throw this.parseError((res.error as Error) || (res.status as any));
+    const body = this.normalizeResponseBody(res);
     switch (method) {
       case BulkCrudOperationKeys.CREATE_ALL:
       case BulkCrudOperationKeys.READ_ALL:
@@ -169,7 +170,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case OperationKeys.READ:
       case OperationKeys.UPDATE:
       case OperationKeys.DELETE:
-        return res.body;
+        return body;
       case PreparedStatementKeys.FIND:
       case PreparedStatementKeys.PAGE:
       case PreparedStatementKeys.FIND_BY:
@@ -177,22 +178,22 @@ export class AxiosHttpAdapter extends HttpAdapter<
       case PreparedStatementKeys.PAGE_BY:
       case PreparedStatementKeys.FIND_ONE_BY:
       case PersistenceKeys.STATEMENT:
-        return super.parseResponse(clazz, method, res.body);
+        return super.parseResponse(clazz, method, body);
       case PreparedStatementKeys.COUNT_OF:
       case PreparedStatementKeys.MAX_OF:
       case PreparedStatementKeys.MIN_OF:
       case PreparedStatementKeys.AVG_OF:
       case PreparedStatementKeys.SUM_OF:
         // These return primitive values, no need to parse as models
-        return res.body;
+        return body;
       case PreparedStatementKeys.DISTINCT_OF:
         // Returns an array of primitive values
-        return res.body;
+        return body;
       case PreparedStatementKeys.GROUP_OF:
         // Returns a Record<string, M[]>, need to parse each group's models
-        if (clazz && typeof res.body === "object" && res.body !== null) {
+        if (clazz && typeof body === "object" && body !== null) {
           const result: Record<string, M[]> = {};
-          for (const [key, value] of Object.entries(res.body)) {
+          for (const [key, value] of Object.entries(body)) {
             if (Array.isArray(value)) {
               result[key] = value.map((d: any) => new clazz(d));
             } else {
@@ -201,10 +202,28 @@ export class AxiosHttpAdapter extends HttpAdapter<
           }
           return result;
         }
-        return res.body;
+        return body;
       default:
-        return res;
+        return body;
     }
+  }
+
+  private normalizeResponseBody(res: any) {
+    if (!res) return res;
+    const candidate =
+      typeof res.body !== "undefined"
+        ? res.body
+        : typeof res.data !== "undefined"
+        ? res.data
+        : res;
+    if (typeof candidate === "string") {
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        return candidate;
+      }
+    }
+    return candidate;
   }
 
   /**
