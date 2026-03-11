@@ -102,7 +102,11 @@ describe("AxiosHttpAdapter integration (no network)", () => {
         throw boom;
       },
     };
-    const adapter = new TestAxiosAdapter(config, failingClient);
+    const adapter = new TestAxiosAdapter(
+      config,
+      failingClient,
+      `axios-${Math.random()}`
+    );
     const ctx = new Context().accumulate({ logger: Logging.get() });
     await expect(adapter.create(Users, 1, new Users(), ctx)).rejects.toThrow(
       InternalError
