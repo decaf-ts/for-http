@@ -80,14 +80,8 @@
   },
   "homepage": "https://github.com/decaf-ts/for-http#readme",
   "devDependencies": {
-    "@decaf-ts/for-nest": "^0.2.41",
     "@decaf-ts/utils": "latest",
-    "@nestjs/common": "^11.1.14",
-    "@nestjs/core": "^11.1.14",
-    "@nestjs/platform-express": "^11.1.14",
-    "@nestjs/swagger": "^11.2.6",
     "@types/jest": "^30.0.0",
-    "event-source-plus": "^0.1.15",
     "fastify": "^5.6.1"
   },
   "dependencies": {
@@ -98,6 +92,7 @@
     "@decaf-ts/injectable-decorators": "latest",
     "@decaf-ts/logging": "latest",
     "@decaf-ts/transactional-decorators": "latest",
-    "axios": "^1.13.2"
+    "axios": "^1.13.2",
+    "event-source-plus": "^0.1.15"
   }
 }
