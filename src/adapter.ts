@@ -113,7 +113,13 @@ export abstract class HttpAdapter<
   C extends Context<HttpFlags> = Context<HttpFlags>,
 > extends Adapter<CONF, CON, Q, C> {
   protected constructor(config: CONF, flavour: string, alias?: string) {
-    super(config, flavour, alias);
+    super(
+      Object.assign({}, config, {
+        headers: typeof config.headers === "undefined" ? true : config.headers,
+      }),
+      flavour,
+      alias
+    );
 
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
@@ -278,8 +284,10 @@ export abstract class HttpAdapter<
 
   protected toHeaders(ctx: C) {
     const fromCtx: Record<string, any> = {};
-    const correlationId = ctx.getOrUndefined("correlationId");
-    if (correlationId) fromCtx[DecafHeaders.CORRELATION_ID] = correlationId;
+    if (this.config.headers) {
+      const correlationId = ctx.getOrUndefined("correlationId");
+      if (correlationId) fromCtx[DecafHeaders.CORRELATION_ID] = correlationId;
+    }
     return { ...fromCtx, ...(ctx.getOrUndefined("headers") || {}) };
   }
 
