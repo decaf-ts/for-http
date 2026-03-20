@@ -15,6 +15,7 @@ import {
 } from "@decaf-ts/decorator-validation";
 import { RestService } from "../../src/RestService";
 import { Logging, toKebabCase } from "@decaf-ts/logging";
+import { DecafHeaders } from "../../src/constants";
 
 // Subclass to override client with a minimal implementation
 class TestAxiosAdapter extends AxiosHttpAdapter {
@@ -53,6 +54,14 @@ class TestModel extends Model {
 
 const table = toKebabCase(Model.tableName(TestModel));
 
+const expectRequest = (rest: Record<string, any>) =>
+  expect.objectContaining({
+    headers: expect.objectContaining({
+      [DecafHeaders.CORRELATION_ID]: expect.any(String),
+    }),
+    ...rest,
+  });
+
 describe("AxiosHttpAdapter integration (no network)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -75,23 +84,25 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const found = await repo.findOneBy("id", 1, ctx);
 
-    expect(mock).toHaveBeenCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/findOneBy/id/1`
-      ),
-    });
+    expect(mock).toHaveBeenCalledWith(
+      expectRequest({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${table}/${PersistenceKeys.STATEMENT}/findOneBy/id/1`
+        ),
+      })
+    );
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const list = await repo.listBy("id", "asc" as any, ctx);
 
-    expect(mock).toHaveBeenLastCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/listBy/id?direction=asc`
-      ),
-    });
+    expect(mock).toHaveBeenLastCalledWith(
+      expectRequest({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${table}/${PersistenceKeys.STATEMENT}/listBy/id?direction=asc`
+        ),
+      })
+    );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const page = await repo.paginateBy(
@@ -101,13 +112,14 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       ctx
     );
 
-    expect(mock).toHaveBeenLastCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/id/1?direction=asc&limit=10`
-      ),
-    });
+    expect(mock).toHaveBeenLastCalledWith(
+      expectRequest({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/id/1?direction=asc&limit=10`
+        ),
+      })
+    );
   });
 
   it("handles queries via prepared statements", async () => {
@@ -125,13 +137,14 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       .offset(5)
       .execute();
 
-    expect(mock).toHaveBeenCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/findByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10&skip=5`
-      ),
-    });
+    expect(mock).toHaveBeenCalledWith(
+      expectRequest({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${table}/${PersistenceKeys.STATEMENT}/findByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10&skip=5`
+        ),
+      })
+    );
   });
 
   it("handles paging via prepared statements using simple queries", async () => {
@@ -166,13 +179,14 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const page = await paginator.page(1, ctx);
 
-    expect(mock).toHaveBeenCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test?direction=asc&limit=1&offset=1`
-      ),
-    });
+    expect(mock).toHaveBeenCalledWith(
+      expectRequest({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${table}/${PersistenceKeys.STATEMENT}/paginateBy/name/test?direction=asc&limit=1&offset=1`
+        ),
+      })
+    );
   });
 
   it("streams multi-page results as models when using prepared pagination", async () => {
@@ -256,13 +270,14 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const page = await paginator.page(1, ctx);
 
-    expect(mock).toHaveBeenCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10&offset=1`
-      ),
-    });
+    expect(mock).toHaveBeenCalledWith(
+      expectRequest({
+        method: "GET",
+        url: expect.stringContaining(
+          `/${table}/${PersistenceKeys.STATEMENT}/paginateByNameAndIdSelectIdOrderById/test/1?direction=asc&limit=10&offset=1`
+        ),
+      })
+    );
   });
 
   it("handles the new find statement through prepared statements", async () => {

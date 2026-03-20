@@ -51,6 +51,7 @@ import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
 import { HttpDispatcher } from "./HttpDispatcher";
+import { DecafHeaders } from "./constants";
 
 export function suffixMethod(
   obj: any,
@@ -273,6 +274,13 @@ export abstract class HttpAdapter<
 
   protected toTableName<M extends Model>(t: string | Constructor<M>) {
     return typeof t === "string" ? t : toKebabCase(Model.tableName(t));
+  }
+
+  protected toHeaders(ctx: C) {
+    const fromCtx: Record<string, any> = {};
+    const correlationId = ctx.getOrUndefined("correlationId");
+    if (correlationId) fromCtx[DecafHeaders.CORRELATION_ID] = correlationId;
+    return { ...fromCtx, ...(ctx.getOrUndefined("headers") || {}) };
   }
 
   /**

@@ -6,6 +6,7 @@ import { id } from "@decaf-ts/db-decorators";
 import { Model, ModelArg, model } from "@decaf-ts/decorator-validation";
 import { prop } from "@decaf-ts/decoration";
 import { Logging, toKebabCase } from "@decaf-ts/logging";
+import { DecafHeaders } from "../../src/constants";
 import { OrderDirection, PersistenceKeys } from "@decaf-ts/core";
 
 @model()
@@ -185,12 +186,16 @@ describe("RestService integration", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const page = await paginator.page(1, ctx);
 
-    expect(mock).toHaveBeenCalledWith({
-      headers: {},
-      method: "GET",
-      url: expect.stringContaining(
-        `/${toKebabCase(Model.tableName(Dummy))}/${PersistenceKeys.STATEMENT}/paginateBy/name?direction=asc&limit=10&offset=1`
-      ),
-    });
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          [DecafHeaders.CORRELATION_ID]: expect.any(String),
+        }),
+        method: "GET",
+        url: expect.stringContaining(
+          `/${toKebabCase(Model.tableName(Dummy))}/${PersistenceKeys.STATEMENT}/paginateBy/name?direction=asc&limit=10&offset=1`
+        ),
+      })
+    );
   });
 });

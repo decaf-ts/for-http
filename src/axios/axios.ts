@@ -106,14 +106,9 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
 
     const req: AxiosRequestConfig = {};
-    if (context) {
-      try {
-        req.headers = context.get("headers") || {};
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (e: unknown) {
-        // do nothing
-      }
-    }
+    if (context)
+      req.headers = { ...(req.headers || {}), ...this.toHeaders(context) };
+
     if (query) {
       req.method = "GET";
       req.url = this.url(
@@ -214,8 +209,8 @@ export class AxiosHttpAdapter extends HttpAdapter<
       typeof res.body !== "undefined"
         ? res.body
         : typeof res.data !== "undefined"
-        ? res.data
-        : res;
+          ? res.data
+          : res;
     if (typeof candidate === "string") {
       try {
         return JSON.parse(candidate);

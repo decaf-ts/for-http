@@ -1,6 +1,7 @@
 import { ResponseParser } from "../types";
 import { AxiosFlags } from "./types";
 import { Context } from "@decaf-ts/core";
+import { DecafHeaders } from "../constants";
 
 /**
  * @description Axios adapter flavor identifier
@@ -14,10 +15,10 @@ export const TaskResponseParser: ResponseParser = (
   res: any,
   ctx: Context<AxiosFlags>
 ) => {
-  if (res.headers && res.headers["x-pending-task"]) {
+  if (res.headers && res.headers[DecafHeaders.PENDING_TASK]) {
     let pending: Record<string, string[]>;
     try {
-      pending = JSON.parse(res.headers["x-pending-task"]);
+      pending = JSON.parse(res.headers[DecafHeaders.PENDING_TASK]);
       Object.entries(pending).forEach(([key, value]) => {
         value.forEach((v) => ctx.pushPending(key, v));
       });
@@ -25,7 +26,7 @@ export const TaskResponseParser: ResponseParser = (
       ctx.logger
         .for(TaskResponseParser)
         .error(
-          `Failed to parse pending tasks header ${res.headers["x-pending-task"]}: ${e}`
+          `Failed to parse pending tasks header ${res.headers[DecafHeaders.PENDING_TASK]}: ${e}`
         );
     }
   }

@@ -11,6 +11,7 @@ import { Metadata } from "@decaf-ts/decoration";
  */
 export * from "./axios";
 export * from "./adapter";
+export * from "./constants";
 export * from "./HttpPaginator";
 export * from "./HttpStatement";
 export * from "./RestRepository";
