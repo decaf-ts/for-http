@@ -20,7 +20,7 @@ export type HttpConfig = {
   host: string;
   parsers?: ResponseParser[];
   eventsListenerPath?: string;
-  headers: boolean;
+  headers?: boolean;
 };
 
 /**
