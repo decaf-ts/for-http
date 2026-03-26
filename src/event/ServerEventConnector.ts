@@ -1,8 +1,9 @@
 import { EventHandlers, ServerEvent } from "./types";
 import { EventSourcePlus } from "event-source-plus";
 import { Serialization } from "@decaf-ts/decorator-validation";
+import { Context, ContextualLoggedClass } from "@decaf-ts/core";
 
-export class ServerEventConnector {
+export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   private static readonly cache = new Map<string, ServerEventConnector>();
 
   static get(url: string): ServerEventConnector {
@@ -53,26 +54,46 @@ export class ServerEventConnector {
 
   private listeners: Set<EventHandlers> = new Set();
 
-  constructor(private readonly url: string) {}
+  constructor(private readonly url: string) {
+    super();
+  }
 
   isOpen(): boolean {
     return this.es !== undefined;
   }
 
   close(): void {
-    if (!this.es) return;
+    const log = this.log.for(this.close);
 
-    if (this.listeners.size > 0) return;
+    if (!this.es) {
+      log.debug(
+        `Skipping connector close because connector for ${this.url} is not open`
+      );
+      return;
+    }
+
+    if (this.listeners.size > 0) {
+      log.warn(`Skipping connector close because still has active listeners`, {
+        url: this.url,
+        listeners: this.listeners.size,
+      });
+      return;
+    }
 
     // Close and drop from cache.
     try {
+      log.info(
+        `ServerEventConnector closing event source connection for listening URL ${this.url}`
+      );
       this.controller?.abort();
     } finally {
       this.controller = undefined;
       this.es = undefined;
       this.listeners.clear();
       ServerEventConnector.cache.delete(this.url);
-      console.log(`EventSourcePlus close for ${this.url}`);
+      log.info(
+        `ServerEventConnector closed connection and removed from active pool for URL ${this.url}`
+      );
     }
   }
 
@@ -86,26 +107,42 @@ export class ServerEventConnector {
       | Record<string, string>
       | (() => Record<string, string> | Promise<Record<string, string>>)
   ): void {
-    if (this.es) return; // already listening. TODO: Add log
+    const log = this.log.for(this.startListening);
 
-    const url = this.url;
+    if (this.es) {
+      log.info(`ServerEventConnector already in pool and listening`, {
+        url: this.url,
+        listeners: this.listeners.size,
+      });
+      return;
+    }
 
-    this.es = new EventSourcePlus(url, {
+    log.info(`Opening event source connection for ${this.url}`);
+    this.es = new EventSourcePlus(this.url, {
       headers,
       credentials: "include",
     });
 
     this.controller = this.es.listen({
       onResponse: () => {
-        console.log("EventSourcePlus connected");
+        log.info(`ServerEventConnector listening events from ${this.url}`);
       },
       onRequestError: ({ error }) => {
-        console.log("EventSourcePlus request error:", error);
+        log.error(`ServerEventConnector error on request`, {
+          url: this.url,
+          error,
+        });
         handlers.onError(String((error as any)?.message ?? error));
       },
       onResponseError: ({ response }) => {
-        console.log("EventSourcePlus response error:", response);
-        handlers.onError(`HTTP ${response.status}`);
+        log.error(`ServerEventConnector received an error response`, {
+          url: this.url,
+          status: response?.status,
+          statusText: response?.statusText,
+        });
+        handlers.onError(
+          `HTTP Error Response: ${response.status} ${response.statusText}`
+        );
       },
       onMessage: (message: any) => {
         const raw =
@@ -114,14 +151,16 @@ export class ServerEventConnector {
             : message;
 
         const event = ServerEventConnector.parseReceivedEvent(raw);
-        if (!event) return;
+        if (!event) {
+          log.warn(`Failed to parse SSE message`, {
+            url: this.url,
+            raw,
+          });
+          return;
+        }
         handlers.onEvent(event);
       },
     });
-
-    // setInterval(() => {
-    //   this.close();
-    // }, 30000);
   }
 
   private addListener(handlers: EventHandlers): void {

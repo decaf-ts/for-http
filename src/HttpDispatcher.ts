@@ -42,29 +42,54 @@ export class HttpDispatcher extends Dispatch<
     );
     this.initialized = true;
     await this.startListening(...ctxArgs);
+
+    log.info(`HttpDispatcher initialized for adapter ${this.adapter}.`);
   }
 
   /**
    * Enables the dispatcher. SSE will only open and start to listening for events if there is at least one observer.
    */
   async startListening(...args: ContextualArgs<any>): Promise<void> {
-    if (!this.initialized || !this.adapter)
-      throw new Error("Cannot start listening before call initialize()");
-
     const { log } = this.logCtx(args, this.startListening);
-    // log.info(`Initializing event listener for adapter ${this.adapter}.`);
+    if (!this.initialized || !this.adapter) {
+      log.error(
+        `Cannot start listening: dispatcher is not initialized or adapter is missing`,
+        {
+          initialized: this.initialized,
+          hasAdapter: !!this.adapter,
+        }
+      );
+      throw new Error("Cannot start listening before call initialize()");
+    }
+
+    if (this.listening) {
+      log.warn(`startListening called but dispatcher is already listening`, {
+        adapter: String(this.adapter),
+      });
+    }
 
     const { protocol, host, eventsListenerPath } = this.adapter
       .config as HttpConfig;
 
-    if (!eventsListenerPath) throw new Error("No eventsListenerPath specified");
+    if (!eventsListenerPath) {
+      log.error(`Cannot start listening: no eventsListenerPath specified`, {
+        protocol,
+        host,
+      });
+      throw new Error("No eventsListenerPath specified");
+    }
 
     const listeningUrl = new URL(
       eventsListenerPath,
       `${protocol}://${host}`
     ).toString();
+
+    log.info(`Opening ServerEventConnector for url: ${listeningUrl}`);
     this.connector = ServerEventConnector.open(listeningUrl);
 
+    log.debug(
+      `ServerEventConnector opened successfully for url: ${listeningUrl}`
+    );
     this.connector.startListening({
       onEvent: async (event: ServerEvent) => {
         const [tableName, operation, id, ...args] = event;
@@ -79,21 +104,36 @@ export class HttpDispatcher extends Dispatch<
             id,
             ...(ctxArgs as [...any[], Context<HttpFlags>])
           )
-          .catch((e) => log.error(`Failed to dispatch SSE event`, e));
+          .catch((e) =>
+            log.error(`ServerEventConnector failed to updateObservers`, e)
+          );
       },
-      onError: (e: any) => log.error(e),
+      onError: (e: any) => {
+        log.error(`ServerEventConnector failed to dispatch event`, {
+          error: e,
+          listeningUrl,
+          adapter: String(this.adapter),
+        });
+      },
     });
 
     this.listening = true;
-    log.info(
-      `Initializing event listener for adapter ${this.adapter} at ${listeningUrl}.`
-    );
+    log.info(`HttpDispatcher is now listening at ${listeningUrl}.`);
   }
 
   override async close(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context<HttpFlags>>
   ): Promise<void> {
+    // const { log } = this.logCtx(args, this.close);
+    //
+    // log.debug(`Closing HttpDispatcher`, {
+    //   hasConnector: !!this.connector,
+    //   listening: this.listening,
+    //   initialized: this.initialized,
+    //   adapter: this.adapter ? String(this.adapter) : undefined,
+    // });
+
     this.connector?.close();
+    this.listening = false;
   }
 }
