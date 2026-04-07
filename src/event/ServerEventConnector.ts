@@ -1,4 +1,4 @@
-import { EventHandlers, ServerEvent } from "./types";
+import { EventHandlers, ServerEvent, ServerRawMessage } from "./types";
 import { EventSourcePlus } from "event-source-plus";
 import { Serialization } from "@decaf-ts/decorator-validation";
 import { Context, ContextualLoggedClass } from "@decaf-ts/core";
@@ -144,7 +144,12 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
           `HTTP Error Response: ${response.status} ${response.statusText}`
         );
       },
-      onMessage: (message: any) => {
+      onMessage: (message: ServerRawMessage) => {
+        if (message.event === "heartbeat") {
+          log.warn(`Refresh connection. Heartbeat received.`);
+          return;
+        }
+
         const raw =
           message && typeof message === "object" && "data" in message
             ? message.data
