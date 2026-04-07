@@ -9,13 +9,13 @@ import {
 } from "@decaf-ts/core";
 import { ServerEvent, ServerEventConnector } from "./event";
 import { HttpConfig, HttpFlags } from "./types";
+import { KeepAliveOperation } from "./constants";
 
 export class HttpDispatcher extends Dispatch<
   Adapter<HttpConfig, any, PreparedStatement<any>, Context<HttpFlags>>
 > {
   private connector?: ServerEventConnector;
 
-  private initialized = false;
   private listening = false;
 
   /**
@@ -97,6 +97,10 @@ export class HttpDispatcher extends Dispatch<
           "onEvent"
         );
 
+        if (operation === KeepAliveOperation) {
+          log.debug(`keep alive received - discarding`);
+          return;
+        }
         super
           .updateObservers(
             tableName,
@@ -122,6 +126,7 @@ export class HttpDispatcher extends Dispatch<
   }
 
   override async close(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context<HttpFlags>>
   ): Promise<void> {
     // const { log } = this.logCtx(args, this.close);
