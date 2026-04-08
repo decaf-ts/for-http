@@ -15,7 +15,7 @@ export class HttpDispatcher extends Dispatch<
 > {
   private connector?: ServerEventConnector;
 
-  protected initialized = false;
+  protected override initialized = false;
   private listening = false;
 
   /**
