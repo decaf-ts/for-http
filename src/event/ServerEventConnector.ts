@@ -3,6 +3,10 @@ import { EventSourcePlus } from "event-source-plus";
 import { Serialization } from "@decaf-ts/decorator-validation";
 import { Context, ContextualLoggedClass } from "@decaf-ts/core";
 
+export type ServerEventConnectorHeaders =
+  | Record<string, string>
+  | (() => Record<string, string> | Promise<Record<string, string>>);
+
 export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   private static readonly cache = new Map<string, ServerEventConnector>();
 
@@ -14,10 +18,13 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     );
   }
 
-  static open(url: string): ServerEventConnector {
+  static open(
+    url: string,
+    headers?: ServerEventConnectorHeaders
+  ): ServerEventConnector {
     if (this.cache.has(url)) return this.cache.get(url) as ServerEventConnector;
 
-    const connector = new ServerEventConnector(url);
+    const connector = new ServerEventConnector(url, headers);
     this.cache.set(url, connector);
     return this.cache.get(url) as ServerEventConnector;
   }
@@ -29,7 +36,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     }
   }
 
-  private static parseReceivedEvent(raw: unknown): ServerEvent | null {
+  private static parseReceivedEvent(raw: unknown): ServerEvent<any> | null {
     try {
       const data = typeof raw === "string" ? JSON.parse(raw) : raw;
       if (!Array.isArray(data) || data.length < 3) return null;
@@ -37,11 +44,17 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
       const [eventName, operationKey, objectId, rawPayload] = data;
       if (typeof eventName !== "string") return null;
 
-      const payload =
-        typeof rawPayload === "string"
-          ? Serialization.deserialize(rawPayload)
-          : rawPayload;
-
+      let payload: Record<string, any> | Array<Record<string, any>>;
+      if (Array.isArray(rawPayload)) {
+        payload = rawPayload.map((item) =>
+          typeof item === "string" ? Serialization.deserialize(item) : item
+        );
+      } else {
+        payload =
+          typeof rawPayload === "string"
+            ? Serialization.deserialize(rawPayload)
+            : rawPayload;
+      }
       return [eventName, String(operationKey), objectId, payload] as const;
     } catch {
       return null;
@@ -51,10 +64,12 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   /** Shared connection state (cached singleton instance). */
   private es?: EventSourcePlus;
   private controller?: { abort: () => void };
-
   private listeners: Set<EventHandlers> = new Set();
 
-  constructor(private readonly url: string) {
+  constructor(
+    private readonly url: string,
+    private readonly headers?: ServerEventConnectorHeaders
+  ) {
     super();
   }
 
@@ -62,29 +77,26 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     return this.es !== undefined;
   }
 
-  close(): void {
+  close(force: boolean = false): void {
     const log = this.log.for(this.close);
 
     if (!this.es) {
       log.debug(
-        `Skipping connector close because connector for ${this.url} is not open`
+        `Skipping EventSource close — no open connection to ${this.url}`
       );
       return;
     }
 
-    if (this.listeners.size > 0) {
-      log.warn(`Skipping connector close because still has active listeners`, {
-        url: this.url,
-        listeners: this.listeners.size,
-      });
+    if (this.listeners.size > 0 && !force) {
+      log.warn(
+        `Skipping EventSource connection close ${this.url} — ${this.listeners.size} active listener(s) remaining.`
+      );
       return;
     }
 
     // Close and drop from cache.
     try {
-      log.info(
-        `ServerEventConnector closing event source connection for listening URL ${this.url}`
-      );
+      log.info(`Closing EventSource connection for listening URL ${this.url}`);
       this.controller?.abort();
     } finally {
       this.controller = undefined;
@@ -92,7 +104,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
       this.listeners.clear();
       ServerEventConnector.cache.delete(this.url);
       log.info(
-        `ServerEventConnector closed connection and removed from active pool for URL ${this.url}`
+        `EventSource connection ${this.url} closed and removed from pool`
       );
     }
   }
@@ -101,52 +113,54 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
    * Increments refCount and ensures EventSource is created.
    * This method must be called only on the shared singleton instance.
    */
-  startListening(
-    handlers: EventHandlers,
-    headers?:
-      | Record<string, string>
-      | (() => Record<string, string> | Promise<Record<string, string>>)
-  ): void {
+  private startListening(): void {
     const log = this.log.for(this.startListening);
-
     if (this.es) {
-      log.info(`ServerEventConnector already in pool and listening`, {
-        url: this.url,
-        listeners: this.listeners.size,
-      });
+      log.info(
+        `Listening address ${this.url} is already in the pool and listening. Skipping opening a new connection.`,
+        { url: this.url, listeners: this.listeners.size }
+      );
       return;
     }
 
-    log.info(`Opening event source connection for ${this.url}`);
+    log.info(`Opening EventSource connection to ${this.url}`);
     this.es = new EventSourcePlus(this.url, {
-      headers,
+      ...(this.headers && { headers: this.headers }),
       credentials: "include",
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self: ServerEventConnector = this;
     this.controller = this.es.listen({
       onResponse: () => {
-        log.info(`ServerEventConnector listening events from ${this.url}`);
+        log.info(`Connected to ${this.url}. Ready to receive events`);
       },
       onRequestError: ({ error }) => {
-        log.error(`ServerEventConnector error on request`, {
+        log.error("Failed to establish EventSource connection", {
           url: this.url,
           error,
         });
-        handlers.onError(String((error as any)?.message ?? error));
+
+        self.listeners.forEach((handler) =>
+          handler.onError(String((error as any)?.message ?? error))
+        );
       },
       onResponseError: ({ response }) => {
-        log.error(`ServerEventConnector received an error response`, {
+        const status = response?.status;
+        const statusText = response?.statusText;
+        log.error("Listening failed with HTTP error response", {
           url: this.url,
-          status: response?.status,
-          statusText: response?.statusText,
+          status,
+          statusText,
         });
-        handlers.onError(
-          `HTTP Error Response: ${response.status} ${response.statusText}`
+        const err = new Error(
+          `HTTP ${status ?? "unknown"} ${statusText ?? "error"}`
         );
+        self.listeners.forEach((handler) => handler.onError(err));
       },
       onMessage: (message: ServerRawMessage) => {
         if (message.event === "heartbeat") {
-          log.warn(`Refresh connection. Heartbeat received.`);
+          log.debug(`Refresh connection. Heartbeat received.`);
           return;
         }
 
@@ -163,16 +177,60 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
           });
           return;
         }
-        handlers.onEvent(event);
+
+        for (const handler of self.listeners) {
+          try {
+            handler.onEvent(event);
+          } catch (err) {
+            log.error("Listener handler failed on event", { err });
+          }
+        }
       },
     });
   }
 
-  private addListener(handlers: EventHandlers): void {
+  addListener(handlers: EventHandlers): () => void {
+    const log = this.log.for(this.addListener);
+    log.info(
+      `Registering listener for connection ${this.url} — ${this.listeners.size} active listener(s)`
+    );
+
+    this.startListening();
     this.listeners.add(handlers);
+
+    log.info(
+      `Listener registered for connection ${this.url} — total listener(s): ${this.listeners.size}`
+    );
+    return () => this.removeListener(handlers);
   }
 
-  private removeListener(handlers: EventHandlers): void {
-    this.listeners.delete(handlers);
+  removeListener(handlers: EventHandlers): void {
+    const log = this.log.for(this.removeListener);
+    const existed = this.listeners.has(handlers);
+
+    log.info(
+      `Unregistering listener for connection ${this.url}. Current active listeners: ${this.listeners.size}`,
+      {
+        listenerFound: existed,
+      }
+    );
+
+    if (existed) {
+      this.listeners.delete(handlers);
+      log.debug(
+        `Listener unregistered for connection ${this.url} — total listener(s): ${this.listeners.size}`
+      );
+    }
+
+    if (this.listeners.size === 0) {
+      log.info(
+        `No listeners remaining. Closing EventSource connection ${this.url}.`,
+        {
+          url: this.url,
+          listeners: this.listeners.size,
+        }
+      );
+      this.close();
+    }
   }
 }

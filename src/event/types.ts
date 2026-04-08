@@ -10,14 +10,23 @@ export type ServerRawMessage = SseMessage & {
   retry?: number;
 };
 
-export type ServerEvent = readonly [
+export type SingleServerEvent<T> = readonly [
   modelName: string,
-  operation: OperationKeys | BulkCrudOperationKeys | string,
+  operation: OperationKeys | string,
   id: string,
-  payload: any,
+  payload: T,
 ];
 
+export type BulkServerEvent<T> = readonly [
+  modelName: string,
+  operation: BulkCrudOperationKeys,
+  id: string[],
+  payload: T[],
+];
+
+export type ServerEvent<T> = SingleServerEvent<T> | BulkServerEvent<T>;
+
 export type EventHandlers = {
-  onEvent: ([tableName, operation, id]: ServerEvent) => void;
+  onEvent: ([tableName, operation, id]: ServerEvent<any>) => void;
   onError: (err: unknown) => void;
 };
