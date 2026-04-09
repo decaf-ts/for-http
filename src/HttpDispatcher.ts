@@ -142,7 +142,7 @@ export class HttpDispatcher extends Dispatch<
     //   adapter: this.adapter ? String(this.adapter) : undefined,
     // });
 
-    this.connector?.close();
+    this.connector?.close(true);
     this.listening = false;
   }
 }
