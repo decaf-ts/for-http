@@ -9,6 +9,7 @@ import {
 } from "@decaf-ts/core";
 import { ServerEvent, ServerEventConnector } from "./event";
 import { HttpConfig, HttpFlags } from "./types";
+import { InternalError } from "@decaf-ts/db-decorators";
 
 export class HttpDispatcher extends Dispatch<
   Adapter<HttpConfig, any, PreparedStatement<any>, Context<HttpFlags>>
@@ -85,7 +86,14 @@ export class HttpDispatcher extends Dispatch<
     ).toString();
 
     log.info(`Opening ServerEventConnector for url: ${listeningUrl}`);
-    this.connector = ServerEventConnector.open(listeningUrl);
+    this.connector = ServerEventConnector.open(listeningUrl, async () => {
+      if (!this.adapter) throw new InternalError("Adapter not initialized");
+      try {
+        return (this.adapter as any).getEventHeaders();
+      } catch (e: unknown) {
+        throw new InternalError(`Failed to get event headers: ${e}`);
+      }
+    });
 
     log.debug(
       `ServerEventConnector opened successfully for url: ${listeningUrl}`
@@ -122,6 +130,7 @@ export class HttpDispatcher extends Dispatch<
   }
 
   override async close(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context<HttpFlags>>
   ): Promise<void> {
     // const { log } = this.logCtx(args, this.close);

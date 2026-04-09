@@ -186,6 +186,13 @@ export abstract class HttpAdapter<
     return new HttpDispatcher();
   }
 
+  protected async getEventHeaders() {
+    if (!this.config.eventHeaderResolver) return {};
+
+    const headers = await Promise.resolve(this.config.eventHeaderResolver);
+    return headers || {};
+  }
+
   /**
    * @description Returns the repository constructor for this adapter
    * @summary Provides the RestService class as the repository implementation for this HTTP adapter.

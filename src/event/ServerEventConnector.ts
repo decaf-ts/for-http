@@ -77,6 +77,16 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     return this.es !== undefined;
   }
 
+  protected async getHeaders() {
+    let headers = this.headers;
+
+    if (typeof this.headers == "function") {
+      headers = await Promise.resolve(this.headers());
+    }
+
+    return headers || {};
+  }
+
   close(force: boolean = false): void {
     const log = this.log.for(this.close);
 
@@ -113,7 +123,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
    * Increments refCount and ensures EventSource is created.
    * This method must be called only on the shared singleton instance.
    */
-  private startListening(): void {
+  private async startListening(): Promise<void> {
     const log = this.log.for(this.startListening);
     if (this.es) {
       log.info(
@@ -124,8 +134,9 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     }
 
     log.info(`Opening EventSource connection to ${this.url}`);
+    const headers = await this.getHeaders();
     this.es = new EventSourcePlus(this.url, {
-      ...(this.headers && { headers: this.headers }),
+      ...(headers && { headers: headers }),
       credentials: "include",
     });
 
@@ -195,12 +206,12 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
       `Registering listener for connection ${this.url} — ${this.listeners.size} active listener(s)`
     );
 
-    this.startListening();
     this.listeners.add(handlers);
-
-    log.info(
-      `Listener registered for connection ${this.url} — total listener(s): ${this.listeners.size}`
-    );
+    this.startListening().then(() => {
+      log.info(
+        `Listener registered for connection ${this.url} — total listener(s): ${this.listeners.size}`
+      );
+    });
     return () => this.removeListener(handlers);
   }
 
