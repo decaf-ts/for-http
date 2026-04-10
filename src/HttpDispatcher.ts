@@ -63,6 +63,12 @@ export class HttpDispatcher extends Dispatch<
       throw new Error("Cannot start listening before call initialize()");
     }
 
+    const conf = this.adapter.config as HttpConfig;
+
+    if (!conf.events) {
+      log.warn("SSe events disabled");
+      return;
+    }
     if (this.listening) {
       log.warn(`startListening called but dispatcher is already listening`, {
         adapter: String(this.adapter),

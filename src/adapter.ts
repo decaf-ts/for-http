@@ -116,6 +116,7 @@ export abstract class HttpAdapter<
     super(
       Object.assign({}, config, {
         headers: typeof config.headers === "undefined" ? true : config.headers,
+        events: typeof config.events === "undefined" ? true : config.events,
       }),
       flavour,
       alias

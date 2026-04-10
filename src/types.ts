@@ -21,6 +21,7 @@ export type HttpConfig = {
   parsers?: ResponseParser[];
   eventsListenerPath?: string;
   headers?: boolean;
+  events?: boolean;
   eventHeaderResolver?: () =>
     | Promise<Record<string, string>>
     | Record<string, string>;
