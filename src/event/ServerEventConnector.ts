@@ -37,6 +37,18 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   }
 
   private static parseReceivedEvent(raw: unknown): ServerEvent<any> | null {
+    const deserializePayload = (value: unknown): any => {
+      if (typeof value !== "string") return value;
+      try {
+        return Serialization.deserialize(value);
+      } catch {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return value;
+        }
+      }
+    };
     try {
       const data = typeof raw === "string" ? JSON.parse(raw) : raw;
       if (!Array.isArray(data) || data.length < 3) return null;
@@ -46,14 +58,9 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
 
       let payload: Record<string, any> | Array<Record<string, any>>;
       if (Array.isArray(rawPayload)) {
-        payload = rawPayload.map((item) =>
-          typeof item === "string" ? Serialization.deserialize(item) : item
-        );
+        payload = rawPayload.map((item) => deserializePayload(item));
       } else {
-        payload =
-          typeof rawPayload === "string"
-            ? Serialization.deserialize(rawPayload)
-            : rawPayload;
+        payload = deserializePayload(rawPayload);
       }
       return [eventName, String(operationKey), objectId, payload] as const;
     } catch {
