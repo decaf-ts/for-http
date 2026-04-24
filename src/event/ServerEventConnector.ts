@@ -2,6 +2,7 @@ import { EventHandlers, ServerEvent, ServerRawMessage } from "./types";
 import { EventSourcePlus } from "event-source-plus";
 import { Serialization } from "@decaf-ts/decorator-validation";
 import { Context, ContextualLoggedClass } from "@decaf-ts/core";
+import { Lock } from "@decaf-ts/transactional-decorators";
 
 export type ServerEventConnectorHeaders =
   | Record<string, string>
@@ -71,7 +72,9 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   /** Shared connection state (cached singleton instance). */
   private es?: EventSourcePlus;
   private controller?: { abort: () => void };
+  private readonly stateLock = new Lock();
   private opening?: Promise<void>;
+  private ready = false;
   private listeners: Set<EventHandlers> = new Set();
 
   constructor(
@@ -83,6 +86,35 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
 
   isOpen(): boolean {
     return this.es !== undefined;
+  }
+
+  private async withStateLock<T>(fn: () => Promise<T> | T): Promise<T> {
+    await this.stateLock.acquire();
+    try {
+      return await Promise.resolve(fn());
+    } finally {
+      this.stateLock.release();
+    }
+  }
+
+  private async getOpening(): Promise<Promise<void> | undefined> {
+    return this.withStateLock(() => this.opening);
+  }
+
+  private async setOpening(opening: Promise<void> | undefined): Promise<void> {
+    await this.withStateLock(() => {
+      this.opening = opening;
+    });
+  }
+
+  private async isReady(): Promise<boolean> {
+    return this.withStateLock(() => this.ready);
+  }
+
+  private async setReady(ready: boolean): Promise<void> {
+    await this.withStateLock(() => {
+      this.ready = ready;
+    });
   }
 
   protected async getHeaders() {
@@ -119,6 +151,8 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     } finally {
       this.controller = undefined;
       this.es = undefined;
+      void this.setReady(false);
+      void this.setOpening(undefined);
       this.listeners.clear();
       ServerEventConnector.cache.delete(this.url);
       log.info(
@@ -133,34 +167,47 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
    */
   private async startListening(): Promise<void> {
     const log = this.log.for(this.startListening);
-    if (this.es) {
+    if (this.es && (await this.isReady())) {
       log.info(
         `Listening address ${this.url} is already in the pool and listening. Skipping opening a new connection.`,
         { url: this.url, listeners: this.listeners.size }
       );
       return;
     }
-    if (this.opening) {
+
+    const pendingOpen = await this.getOpening();
+    if (pendingOpen) {
       log.debug(`Connection open already in progress for ${this.url}`, {
         url: this.url,
         listeners: this.listeners.size,
       });
-      await this.opening;
+      await pendingOpen;
       return;
     }
-    this.opening = (async () => {
+
+    const openPromise = (async () => {
       log.info(`Opening EventSource connection to ${this.url}`);
       const headers = await this.getHeaders();
       this.es = new EventSourcePlus(this.url, {
         ...(headers && { headers: headers }),
         credentials: "include",
       });
+      await this.setReady(false);
+
+      let completeOpen!: () => void;
+      let failOpen!: (reason?: unknown) => void;
+      const connected = new Promise<void>((resolve, reject) => {
+        completeOpen = resolve;
+        failOpen = reject;
+      });
 
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const self: ServerEventConnector = this;
       this.controller = this.es.listen({
-        onResponse: () => {
+        onResponse: async () => {
+          await self.setReady(true);
           log.info(`Connected to ${this.url}. Ready to receive events`);
+          completeOpen();
         },
         onRequestError: ({ error }) => {
           log.error("Failed to establish EventSource connection", {
@@ -168,6 +215,8 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
             error,
           });
 
+          void self.setReady(false);
+          failOpen(error);
           self.listeners.forEach((handler) =>
             handler.onError(String((error as any)?.message ?? error))
           );
@@ -183,6 +232,8 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
           const err = new Error(
             `HTTP ${status ?? "unknown"} ${statusText ?? "error"}`
           );
+          void self.setReady(false);
+          failOpen(err);
           self.listeners.forEach((handler) => handler.onError(err));
         },
         onMessage: (message: ServerRawMessage) => {
@@ -214,11 +265,29 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
           }
         },
       });
+
+      await connected;
     })().finally(() => {
-      this.opening = undefined;
+      void this.setOpening(undefined);
     });
 
-    await this.opening;
+    await this.setOpening(openPromise);
+    try {
+      await openPromise;
+    } catch (error) {
+      this.controller = undefined;
+      this.es = undefined;
+      await this.setReady(false);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensures the shared connection has completed its async open sequence.
+   * Callers that need "ready before proceeding" semantics should await this.
+   */
+  async ensureListening(): Promise<void> {
+    await this.startListening();
   }
 
   addListener(handlers: EventHandlers): () => void {
@@ -228,7 +297,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     );
 
     this.listeners.add(handlers);
-    this.startListening().then(() => {
+    this.ensureListening().then(() => {
       log.info(
         `Listener registered for connection ${this.url} — total listener(s): ${this.listeners.size}`
       );

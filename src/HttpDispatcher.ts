@@ -133,6 +133,9 @@ export class HttpDispatcher extends Dispatch<
       },
     });
 
+    // Avoid races where writes happen before the SSE stream finishes connecting.
+    await this.connector.ensureListening();
+
     this.listening = true;
     log.info(`HttpDispatcher is now listening at ${listeningUrl}.`);
   }
