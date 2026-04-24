@@ -97,10 +97,6 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
     }
   }
 
-  private async getOpening(): Promise<Promise<void> | undefined> {
-    return this.withStateLock(() => this.opening);
-  }
-
   private async setOpening(opening: Promise<void> | undefined): Promise<void> {
     await this.withStateLock(() => {
       this.opening = opening;
@@ -167,25 +163,40 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
    */
   private async startListening(): Promise<void> {
     const log = this.log.for(this.startListening);
-    if (this.es && (await this.isReady())) {
-      log.info(
-        `Listening address ${this.url} is already in the pool and listening. Skipping opening a new connection.`,
-        { url: this.url, listeners: this.listeners.size }
-      );
-      return;
-    }
+    let owner = false;
+    let openPromise: Promise<void>;
+    let resolveOpen!: () => void;
+    let rejectOpen!: (reason?: unknown) => void;
+    const deferredOpen = new Promise<void>((resolve, reject) => {
+      resolveOpen = resolve;
+      rejectOpen = reject;
+    });
 
-    const pendingOpen = await this.getOpening();
-    if (pendingOpen) {
+    await this.withStateLock(() => {
+      if (this.es && this.ready) {
+        openPromise = Promise.resolve();
+        return;
+      }
+      if (this.opening) {
+        openPromise = this.opening;
+        return;
+      }
+      this.ready = false;
+      this.opening = deferredOpen;
+      openPromise = deferredOpen;
+      owner = true;
+    });
+
+    if (!owner) {
       log.debug(`Connection open already in progress for ${this.url}`, {
         url: this.url,
         listeners: this.listeners.size,
       });
-      await pendingOpen;
+      await openPromise!;
       return;
     }
 
-    const openPromise = (async () => {
+    (async () => {
       log.info(`Opening EventSource connection to ${this.url}`);
       const headers = await this.getHeaders();
       this.es = new EventSourcePlus(this.url, {
@@ -193,35 +204,35 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
         credentials: "include",
       });
       await this.setReady(false);
-
-      let completeOpen!: () => void;
-      let failOpen!: (reason?: unknown) => void;
-      const connected = new Promise<void>((resolve, reject) => {
-        completeOpen = resolve;
-        failOpen = reject;
-      });
+      let settled = false;
 
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const self: ServerEventConnector = this;
       this.controller = this.es.listen({
         onResponse: async () => {
+          if (settled) return;
+          settled = true;
           await self.setReady(true);
           log.info(`Connected to ${this.url}. Ready to receive events`);
-          completeOpen();
+          resolveOpen();
         },
         onRequestError: ({ error }) => {
+          if (settled) return;
+          settled = true;
           log.error("Failed to establish EventSource connection", {
             url: this.url,
             error,
           });
 
           void self.setReady(false);
-          failOpen(error);
+          rejectOpen(error);
           self.listeners.forEach((handler) =>
             handler.onError(String((error as any)?.message ?? error))
           );
         },
         onResponseError: ({ response }) => {
+          if (settled) return;
+          settled = true;
           const status = response?.status;
           const statusText = response?.statusText;
           log.error("Listening failed with HTTP error response", {
@@ -233,7 +244,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
             `HTTP ${status ?? "unknown"} ${statusText ?? "error"}`
           );
           void self.setReady(false);
-          failOpen(err);
+          rejectOpen(err);
           self.listeners.forEach((handler) => handler.onError(err));
         },
         onMessage: (message: ServerRawMessage) => {
@@ -265,20 +276,16 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
           }
         },
       });
-
-      await connected;
-    })().finally(() => {
-      void this.setOpening(undefined);
-    });
-
-    await this.setOpening(openPromise);
-    try {
-      await openPromise;
-    } catch (error) {
+    })().catch(async (error) => {
       this.controller = undefined;
       this.es = undefined;
       await this.setReady(false);
-      throw error;
+      rejectOpen(error);
+    });
+    try {
+      await openPromise!;
+    } finally {
+      await this.setOpening(undefined);
     }
   }
 
