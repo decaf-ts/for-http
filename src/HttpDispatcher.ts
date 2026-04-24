@@ -15,6 +15,7 @@ export class HttpDispatcher extends Dispatch<
   Adapter<HttpConfig, any, PreparedStatement<any>, Context<HttpFlags>>
 > {
   private connector?: ServerEventConnector;
+  private removeConnectorListener?: () => void;
 
   protected override initialized = false;
   private listening = false;
@@ -104,7 +105,8 @@ export class HttpDispatcher extends Dispatch<
     log.debug(
       `ServerEventConnector opened successfully for url: ${listeningUrl}`
     );
-    this.connector.addListener({
+    this.removeConnectorListener?.();
+    this.removeConnectorListener = this.connector.addListener({
       onEvent: async (event: ServerEvent<any>) => {
         const [tableName, operation, id, ...args] = event;
         const { log, ctxArgs } = (await this.logCtx(args, operation, true)).for(
@@ -148,7 +150,9 @@ export class HttpDispatcher extends Dispatch<
     //   adapter: this.adapter ? String(this.adapter) : undefined,
     // });
 
-    this.connector?.close(true);
+    this.removeConnectorListener?.();
+    this.removeConnectorListener = undefined;
+    this.connector?.close();
     this.listening = false;
   }
 }

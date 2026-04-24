@@ -64,6 +64,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   /** Shared connection state (cached singleton instance). */
   private es?: EventSourcePlus;
   private controller?: { abort: () => void };
+  private opening?: Promise<void>;
   private listeners: Set<EventHandlers> = new Set();
 
   constructor(
@@ -132,72 +133,85 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
       );
       return;
     }
+    if (this.opening) {
+      log.debug(`Connection open already in progress for ${this.url}`, {
+        url: this.url,
+        listeners: this.listeners.size,
+      });
+      await this.opening;
+      return;
+    }
+    this.opening = (async () => {
+      log.info(`Opening EventSource connection to ${this.url}`);
+      const headers = await this.getHeaders();
+      this.es = new EventSourcePlus(this.url, {
+        ...(headers && { headers: headers }),
+        credentials: "include",
+      });
 
-    log.info(`Opening EventSource connection to ${this.url}`);
-    const headers = await this.getHeaders();
-    this.es = new EventSourcePlus(this.url, {
-      ...(headers && { headers: headers }),
-      credentials: "include",
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const self: ServerEventConnector = this;
-    this.controller = this.es.listen({
-      onResponse: () => {
-        log.info(`Connected to ${this.url}. Ready to receive events`);
-      },
-      onRequestError: ({ error }) => {
-        log.error("Failed to establish EventSource connection", {
-          url: this.url,
-          error,
-        });
-
-        self.listeners.forEach((handler) =>
-          handler.onError(String((error as any)?.message ?? error))
-        );
-      },
-      onResponseError: ({ response }) => {
-        const status = response?.status;
-        const statusText = response?.statusText;
-        log.error("Listening failed with HTTP error response", {
-          url: this.url,
-          status,
-          statusText,
-        });
-        const err = new Error(
-          `HTTP ${status ?? "unknown"} ${statusText ?? "error"}`
-        );
-        self.listeners.forEach((handler) => handler.onError(err));
-      },
-      onMessage: (message: ServerRawMessage) => {
-        if (message.event === "heartbeat") {
-          log.debug(`Refresh connection. Heartbeat received.`);
-          return;
-        }
-
-        const raw =
-          message && typeof message === "object" && "data" in message
-            ? message.data
-            : message;
-
-        const event = ServerEventConnector.parseReceivedEvent(raw);
-        if (!event) {
-          log.warn(`Failed to parse SSE message`, {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self: ServerEventConnector = this;
+      this.controller = this.es.listen({
+        onResponse: () => {
+          log.info(`Connected to ${this.url}. Ready to receive events`);
+        },
+        onRequestError: ({ error }) => {
+          log.error("Failed to establish EventSource connection", {
             url: this.url,
-            raw,
+            error,
           });
-          return;
-        }
 
-        for (const handler of self.listeners) {
-          try {
-            handler.onEvent(event);
-          } catch (err) {
-            log.error("Listener handler failed on event", { err });
+          self.listeners.forEach((handler) =>
+            handler.onError(String((error as any)?.message ?? error))
+          );
+        },
+        onResponseError: ({ response }) => {
+          const status = response?.status;
+          const statusText = response?.statusText;
+          log.error("Listening failed with HTTP error response", {
+            url: this.url,
+            status,
+            statusText,
+          });
+          const err = new Error(
+            `HTTP ${status ?? "unknown"} ${statusText ?? "error"}`
+          );
+          self.listeners.forEach((handler) => handler.onError(err));
+        },
+        onMessage: (message: ServerRawMessage) => {
+          if (message.event === "heartbeat") {
+            log.debug(`Refresh connection. Heartbeat received.`);
+            return;
           }
-        }
-      },
+
+          const raw =
+            message && typeof message === "object" && "data" in message
+              ? message.data
+              : message;
+
+          const event = ServerEventConnector.parseReceivedEvent(raw);
+          if (!event) {
+            log.warn(`Failed to parse SSE message`, {
+              url: this.url,
+              raw,
+            });
+            return;
+          }
+
+          for (const handler of self.listeners) {
+            try {
+              handler.onEvent(event);
+            } catch (err) {
+              log.error("Listener handler failed on event", { err });
+            }
+          }
+        },
+      });
+    })().finally(() => {
+      this.opening = undefined;
     });
+
+    await this.opening;
   }
 
   addListener(handlers: EventHandlers): () => void {
