@@ -115,4 +115,49 @@ describe("AxiosHttpAdapter integration (no network)", () => {
     await expect(adapter.update(Users, 1, {}, ctx)).rejects.toThrow(InternalError);
     await expect(adapter.delete(Users, 1, ctx)).rejects.toThrow(InternalError);
   });
+
+  test("simple request helpers map options to axios config", async () => {
+    let captured: any;
+    const client = {
+      request: async (details: any) => {
+        captured = details;
+        return { status: 200, body: { ok: true } };
+      },
+    };
+    const adapter = new TestAxiosAdapter(
+      config,
+      client,
+      `axios-${Math.random()}`
+    );
+
+    await adapter.get("https://example.com/users", {
+      timeout: 250,
+      headers: { "x-test": "1" },
+      includeCredentials: true,
+      validateStatus: (status) => status < 500,
+      transformResponse: (data) => data,
+    });
+    expect(captured).toEqual(
+      expect.objectContaining({
+        method: "GET",
+        url: "https://example.com/users",
+        timeout: 250,
+        withCredentials: true,
+      })
+    );
+
+    await adapter.post(
+      "https://example.com/users",
+      { name: "alice" },
+      { responseType: "json" }
+    );
+    expect(captured).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        url: "https://example.com/users",
+        data: { name: "alice" },
+        responseType: "json",
+      })
+    );
+  });
 });

@@ -1,6 +1,6 @@
 import { RestService } from "../../src/RestService";
 import { HttpAdapter } from "../../src/adapter";
-import type { HttpConfig } from "../../src/types";
+import type { HttpConfig, HttpMethod, HttpRequestOptions } from "../../src/types";
 import {
   InternalError,
   BaseError,
@@ -21,11 +21,45 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
     return {} as any;
   }
   override async request<V>(details: any): Promise<V> {
+    if (
+      details &&
+      typeof details === "object" &&
+      typeof details.url === "string" &&
+      typeof details.method === "string"
+    ) {
+      const url = new URL(details.url);
+      if (url.pathname.endsWith("/bulk")) {
+        if (details.method === "GET" || details.method === "DELETE") {
+          return url.searchParams
+            .getAll("ids")
+            .map((id) => ({ id })) as unknown as V;
+        }
+        if (details.method === "POST" || details.method === "PUT") {
+          if (Array.isArray(details.data)) return details.data as V;
+          if (typeof details.data === "string")
+            return JSON.parse(details.data) as V;
+        }
+      }
+    }
     return details as V;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  toRequest(query: any): any {}
+  toRequest(
+    ctxOrQueryOrMethod: any,
+    ctxOrUrl?: any,
+    data?: unknown,
+    options?: HttpRequestOptions
+  ): any {
+    if (typeof ctxOrQueryOrMethod === "string") {
+      return {
+        method: ctxOrQueryOrMethod as HttpMethod,
+        url: ctxOrUrl,
+        data,
+        ...(options || {}),
+      };
+    }
+    return {};
+  }
 
   async create<M extends Model>(
     tableName: Constructor<M>,
@@ -56,10 +90,35 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any, any> {
   async delete<M extends Model>(
     tableName: Constructor<M>,
     id: PrimaryKeyType,
+    ...args: ContextualArgs<Context>
+  ): Promise<Record<string, any>>;
+  async delete(url: string, options?: HttpRequestOptions): Promise<any>;
+  async delete<M extends Model>(
+    tableNameOrUrl: Constructor<M> | string,
+    idOrOptions?: PrimaryKeyType | HttpRequestOptions,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
-    return { id, deleted: true } as any;
+    if (
+      typeof idOrOptions === "undefined" ||
+      (typeof idOrOptions === "object" && !Array.isArray(idOrOptions))
+    ) {
+      if (
+        typeof tableNameOrUrl === "string" &&
+        tableNameOrUrl.includes("/bulk")
+      ) {
+        const url = new URL(tableNameOrUrl);
+        return {
+          code: 200,
+          data: url.searchParams.getAll("ids").map((id) => ({ id })),
+        } as unknown as Record<string, any>;
+      }
+      return {
+        code: 200,
+        data: { method: "DELETE", url: tableNameOrUrl, ...(idOrOptions || {}) },
+      };
+    }
+    return { id: idOrOptions, deleted: true } as any;
   }
 
   parseError<E extends BaseError>(err: Error): E {

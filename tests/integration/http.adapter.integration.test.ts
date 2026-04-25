@@ -8,18 +8,30 @@ import {
   OperationKeys,
   PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
-import type { HttpConfig } from "../../src/types";
+import type { HttpConfig, HttpMethod, HttpRequestOptions } from "../../src/types";
 
 class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
-  parseResponse(method: OperationKeys | string, res: any) {
+  parseResponse(_clazz: any, method: OperationKeys | string, res: any) {
     return res;
   }
   constructor(config: HttpConfig, alias?: string) {
     super(config, "test-http", alias);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  toRequest(query: any): any {
+  toRequest(
+    ctxOrQueryOrMethod: any,
+    ctxOrUrl?: any,
+    data?: unknown,
+    options?: HttpRequestOptions
+  ): any {
+    if (typeof ctxOrQueryOrMethod === "string") {
+      return {
+        method: ctxOrQueryOrMethod as HttpMethod,
+        url: ctxOrUrl,
+        data,
+        ...(options || {}),
+      };
+    }
     return {};
   }
 
@@ -59,13 +71,24 @@ class TestHttpAdapter extends HttpAdapter<HttpConfig, any, any> {
     return { tableName, id, ...model };
   }
   // @ts-expect-error for test
+  async delete(tableName: string, id: PrimaryKeyType, ...args: ContextualArgs<Context>): Promise<Record<string, any>>;
+  async delete(url: string, options?: HttpRequestOptions): Promise<any>;
   async delete(
-    tableName: string,
-    id: PrimaryKeyType,
+    tableNameOrUrl: string,
+    idOrOptions?: PrimaryKeyType | HttpRequestOptions,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context>
   ): Promise<Record<string, any>> {
-    return { tableName, id } as any;
+    if (
+      typeof idOrOptions === "undefined" ||
+      (typeof idOrOptions === "object" && !Array.isArray(idOrOptions))
+    ) {
+      return {
+        code: 200,
+        data: { method: "DELETE", url: tableNameOrUrl, ...(idOrOptions || {}) },
+      };
+    }
+    return { tableName: tableNameOrUrl, id: idOrOptions } as any;
   }
   // expose protected url for testing
   public buildUrl(tableName: string, query?: Record<string, string | number>) {
@@ -96,6 +119,59 @@ describe("HttpAdapter base features", () => {
 
     const withQuery = adapter.buildUrl("search", { q: "John Doe", page: 2 });
     expect(withQuery).toBe("https://api.example.com/search?q=John+Doe&page=2");
+  });
+
+  test("simple get/post/put/delete should delegate to request() with request options", async () => {
+    const url = "https://api.example.com/v1/users";
+
+    const getResult = await adapter.get(url, {
+      timeout: 1000,
+      includeCredentials: true,
+    });
+    expect(getResult.data).toEqual(
+      expect.objectContaining({
+        method: "GET",
+        url,
+        timeout: 1000,
+        includeCredentials: true,
+      })
+    );
+
+    const postResult = await adapter.post(
+      url,
+      { name: "Alice" },
+      { headers: { "x-test": "1" } }
+    );
+    expect(postResult.data).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        url,
+        data: { name: "Alice" },
+      })
+    );
+
+    const putResult = await adapter.put(
+      url,
+      { name: "Bob" },
+      { validateStatus: (status) => status < 500 }
+    );
+    expect(putResult.data).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        url,
+        data: { name: "Bob" },
+      })
+    );
+
+    const deleteResult = await adapter.delete(url, {
+      headers: { "x-delete": "1" },
+    });
+    expect(deleteResult.data).toEqual(
+      expect.objectContaining({
+        method: "DELETE",
+        url,
+      })
+    );
   });
 
   test("parseError() should pass through errors as InternalError", () => {

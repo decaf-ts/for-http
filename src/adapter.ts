@@ -37,7 +37,13 @@ import {
   ValidationError,
   wrapMethodWithContext,
 } from "@decaf-ts/db-decorators";
-import { HttpConfig, HttpFlags } from "./types";
+import {
+  HttpConfig,
+  HttpFlags,
+  HttpMethod,
+  HttpRequestOptions,
+  HttpResponse,
+} from "./types";
 import { Model } from "@decaf-ts/decorator-validation";
 import {
   apply,
@@ -378,7 +384,113 @@ export abstract class HttpAdapter<
   abstract toRequest(query: Q): REQ;
   abstract toRequest(ctx: C): REQ;
   abstract toRequest(query: Q, ctx: C): REQ;
-  abstract toRequest(ctxOrQuery: C | Q, ctx?: C): REQ;
+  abstract toRequest(
+    method: HttpMethod,
+    url: string,
+    data?: unknown,
+    options?: HttpRequestOptions
+  ): REQ;
+  abstract toRequest(
+    ctxOrQueryOrMethod: C | Q | HttpMethod,
+    ctxOrUrl?: C | string,
+    data?: unknown,
+    options?: HttpRequestOptions
+  ): REQ;
+
+  protected toHttpResponse<V = any, E = unknown>(
+    parsed: any,
+    raw?: any
+  ): HttpResponse<V, E> {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      ("code" in parsed || "error" in parsed)
+    ) {
+      return parsed as HttpResponse<V, E>;
+    }
+
+    const candidate = typeof raw !== "undefined" ? raw : parsed;
+    const code =
+      candidate && typeof candidate.code === "number"
+        ? candidate.code
+        : candidate && typeof candidate.status === "number"
+          ? candidate.status
+          : undefined;
+    const error =
+      parsed && typeof parsed === "object" && "error" in parsed
+        ? (parsed.error as E)
+        : candidate && typeof candidate === "object" && "error" in candidate
+          ? (candidate.error as E)
+          : undefined;
+
+    return {
+      code,
+      data: parsed as V,
+      error,
+    };
+  }
+
+  async get<V = any, E = unknown>(
+    url: string,
+    options?: HttpRequestOptions,
+    ...args: MaybeContextualArg<C>
+  ): Promise<HttpResponse<V, E>> {
+    const { ctx } = (await this.logCtx(args, this.get.name, true)).for(
+      this.get
+    );
+    try {
+      const res = await this.request<any>(
+        this.toRequest("GET", url, undefined, options),
+        ctx
+      );
+      const parsed = this.parseResponse(undefined, "GET", res) as V;
+      return this.toHttpResponse<V, E>(parsed, res);
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
+
+  async post<V = any, E = unknown>(
+    url: string,
+    data: unknown,
+    options?: HttpRequestOptions,
+    ...args: MaybeContextualArg<C>
+  ): Promise<HttpResponse<V, E>> {
+    const { ctx } = (await this.logCtx(args, this.post.name, true)).for(
+      this.post
+    );
+    try {
+      const res = await this.request<any>(
+        this.toRequest("POST", url, data, options),
+        ctx
+      );
+      const parsed = this.parseResponse(undefined, "POST", res) as V;
+      return this.toHttpResponse<V, E>(parsed, res);
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
+
+  async put<V = any, E = unknown>(
+    url: string,
+    data: unknown,
+    options?: HttpRequestOptions,
+    ...args: MaybeContextualArg<C>
+  ): Promise<HttpResponse<V, E>> {
+    const { ctx } = (await this.logCtx(args, this.put.name, true)).for(
+      this.put
+    );
+    try {
+      const res = await this.request<any>(
+        this.toRequest("PUT", url, data, options),
+        ctx
+      );
+      const parsed = this.parseResponse(undefined, "PUT", res) as V;
+      return this.toHttpResponse<V, E>(parsed, res);
+    } catch (e: any) {
+      throw this.parseError(e);
+    }
+  }
 
   /**
    * @description Sends an HTTP request
@@ -424,12 +536,38 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
    */
-  abstract override create<M extends Model>(
+  override async create<M extends Model>(
     tableName: Constructor<M>,
     id: PrimaryKeyType,
     model: Record<string, any>,
     ...args: ContextualArgs<C>
-  ): Promise<Record<string, any>>;
+  ): Promise<Record<string, any>> {
+    const url = this.url(tableName, this.extractIdArgs(tableName, id));
+    const response = await this.post<Record<string, any>>(
+      url,
+      JSON.stringify(model),
+      undefined,
+      ...args
+    );
+    return response.data as Record<string, any>;
+  }
+
+  override async createAll<M extends Model>(
+    tableName: Constructor<M>,
+
+    ids: PrimaryKeyType[],
+    model: Record<string, any>[],
+    ...args: ContextualArgs<C>
+  ): Promise<Record<string, any>[]> {
+    const url = this.url(tableName, ["bulk"]);
+    const response = await this.post<Record<string, any>[]>(
+      url,
+      JSON.stringify(model),
+      undefined,
+      ...args
+    );
+    return response.data as Record<string, any>[];
+  }
 
   /**
    * @description Retrieves a resource by ID
@@ -440,11 +578,33 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the retrieved resource
    */
-  abstract override read<M extends Model>(
+  override async read<M extends Model>(
     tableName: Constructor<M>,
     id: PrimaryKeyType,
     ...args: ContextualArgs<C>
-  ): Promise<Record<string, any>>;
+  ): Promise<Record<string, any>> {
+    const url = this.url(tableName, this.extractIdArgs(tableName, id));
+    const response = await this.get<Record<string, any>>(
+      url,
+      undefined,
+      ...args
+    );
+    return response.data as Record<string, any>;
+  }
+
+  override async readAll<M extends Model>(
+    tableName: Constructor<M>,
+    ids: PrimaryKeyType[],
+    ...args: ContextualArgs<C>
+  ): Promise<Record<string, any>[]> {
+    const url = this.url(tableName, ["bulk"], { ids } as any);
+    const response = await this.get<Record<string, any>[]>(
+      url,
+      undefined,
+      ...args
+    );
+    return response.data as Record<string, any>[];
+  }
 
   /**
    * @description Updates an existing resource
@@ -456,12 +616,38 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
    */
-  abstract override update<M extends Model>(
+  override async update<M extends Model>(
     tableName: Constructor<M>,
     id: string | number,
     model: Record<string, any>,
     ...args: ContextualArgs<C>
-  ): Promise<Record<string, any>>;
+  ): Promise<Record<string, any>> {
+    const url = this.url(tableName, this.extractIdArgs(tableName, id));
+    const response = await this.put<Record<string, any>>(
+      url,
+      JSON.stringify(model),
+      undefined,
+      ...args
+    );
+    return response.data as Record<string, any>;
+  }
+
+  override async updateAll<M extends Model>(
+    tableName: Constructor<M>,
+
+    ids: PrimaryKeyType[],
+    model: Record<string, any>[],
+    ...args: ContextualArgs<C>
+  ): Promise<Record<string, any>[]> {
+    const url = this.url(tableName, ["bulk"]);
+    const response = await this.put<Record<string, any>[]>(
+      url,
+      JSON.stringify(model),
+      undefined,
+      ...args
+    );
+    return response.data as Record<string, any>[];
+  }
 
   /**
    * @description Deletes a resource by ID
@@ -472,11 +658,76 @@ export abstract class HttpAdapter<
    * @param {...any[]} args - Additional arguments
    * @return {Promise<Record<string, any>>} A promise that resolves with the deletion result
    */
-  abstract override delete<M extends Model>(
+  override async delete<M extends Model>(
     tableName: Constructor<M>,
     id: PrimaryKeyType,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>>;
+  override async delete<V = any>(
+    url: string,
+    options?: HttpRequestOptions,
+    ...args: MaybeContextualArg<C>
+  ): Promise<HttpResponse<V>>;
+  override async delete<M extends Model, V = any>(
+    tableNameOrUrl: Constructor<M> | string,
+    idOrOptions?: PrimaryKeyType | HttpRequestOptions,
+    ...args: MaybeContextualArg<C>
+  ): Promise<Record<string, any> | HttpResponse<V>> {
+    const { ctx } = (await this.logCtx(args, this.delete.name, true)).for(
+      this.delete
+    );
+    if (
+      typeof idOrOptions === "undefined" ||
+      (typeof idOrOptions === "object" && !Array.isArray(idOrOptions))
+    ) {
+      if (typeof tableNameOrUrl !== "string") {
+        throw new InternalError(
+          "Simple delete(url, options) requires a URL string"
+        );
+      }
+      try {
+        const response = await this.request<any>(
+          this.toRequest(
+            "DELETE",
+            tableNameOrUrl,
+            undefined,
+            idOrOptions as HttpRequestOptions | undefined
+          ),
+          ctx
+        );
+        const parsed = this.parseResponse(undefined, "DELETE", response) as V;
+        return this.toHttpResponse<V>(parsed, response);
+      } catch (e: any) {
+        throw this.parseError(e);
+      }
+    }
+
+    const id = idOrOptions as PrimaryKeyType;
+    const url = this.url(
+      tableNameOrUrl as Constructor<M>,
+      this.extractIdArgs(tableNameOrUrl as Constructor<M>, id)
+    );
+    const response = await this.delete<Record<string, any>>(
+      url,
+      undefined,
+      ctx
+    );
+    return response.data as Record<string, any>;
+  }
+
+  override async deleteAll<M extends Model>(
+    tableName: Constructor<M>,
+    ids: PrimaryKeyType[],
+    ...args: ContextualArgs<C>
+  ): Promise<Record<string, any>[]> {
+    const url = this.url(tableName, ["bulk"], { ids } as any);
+    const response = (await this.delete<Record<string, any>[]>(
+      url,
+      undefined,
+      ...args
+    )) as HttpResponse<Record<string, any>[]>;
+    return response.data as Record<string, any>[];
+  }
 
   /**
    * @description Executes a raw query

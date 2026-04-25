@@ -45,11 +45,13 @@ Core goals
 Key building blocks
 - HttpConfig: A minimal connection config with protocol and host.
 - HttpFlags: Extends RepositoryFlags to include optional HTTP headers.
+- HttpRequestOptions: for-http owned request options aligned with Axios semantics (`timeout`, `headers`, `transformResponse`, `validateStatus`, `includeCredentials`, and more).
 - HttpAdapter<Y, CON, Q, F, C>:
   - Extends the core Adapter to focus on HTTP.
   - Adds default flags() with headers support.
   - Provides URL building (protected url()) and error parsing (parseError()).
   - Declares abstract request(), create(), read(), update(), delete().
+  - Provides simple request helpers: `get(url, options?)`, `post(url, data, options?)`, `put(url, data, options?)`, and `delete(url, options?)` (via overload).
   - Declares optional/unsupported-by-default raw(), Sequence(), Statement(), parseCondition() that concrete adapters may implement if needed.
   - repository() returns RestService as the default repository/service implementation for this adapter type.
 - RestService<M, Q, A, F, C>:
@@ -130,6 +132,30 @@ import { HttpConfig } from "@decaf-ts/for-http";
 
 const config: HttpConfig = { protocol: "https", host: "api.example.com" };
 const adapter = new AxiosHttpAdapter(config);
+```
+
+## Simple request helpers and options
+
+Description: Use adapter-level `get/post/put/delete` helpers for raw endpoint calls with typed request options.
+
+```ts
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { HttpConfig, HttpRequestOptions } from "@decaf-ts/for-http";
+
+const config: HttpConfig = { protocol: "https", host: "api.example.com" };
+const adapter = new AxiosHttpAdapter(config);
+
+const opts: HttpRequestOptions = {
+  timeout: 3000,
+  headers: { Authorization: "Bearer <token>" },
+  includeCredentials: true, // mapped to axios withCredentials
+  validateStatus: (status) => status < 500,
+};
+
+const users = await adapter.get("/v1/users", opts);
+const created = await adapter.post("/v1/users", { name: "Alice" }, opts);
+const updated = await adapter.put("/v1/users/u1", { name: "Alice A." }, opts);
+const removed = await adapter.delete("/v1/users/u1", opts);
 ```
 
 ## Service: RestService

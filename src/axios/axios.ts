@@ -1,23 +1,22 @@
 import { HttpAdapter } from "../adapter";
 import { Axios, AxiosRequestConfig } from "axios";
-import { HttpConfig } from "../types";
+import { HttpConfig, HttpMethod, HttpRequestOptions } from "../types";
 import { AxiosFlags } from "./types";
 import {
   BaseError,
   BulkCrudOperationKeys,
   InternalError,
   OperationKeys,
-  PrimaryKeyType,
 } from "@decaf-ts/db-decorators";
 import {
   Context,
-  ContextualArgs,
+  MaybeContextualArg,
   PersistenceKeys,
   PreparedStatement,
   PreparedStatementKeys,
 } from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
-import { Model, ModelKeys } from "@decaf-ts/decorator-validation";
+import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 
 /**
@@ -91,18 +90,38 @@ export class AxiosHttpAdapter extends HttpAdapter<
     ctx: Context<AxiosFlags>
   ): AxiosRequestConfig;
   override toRequest(
-    ctxOrQuery: Context<AxiosFlags> | PreparedStatement<any>,
-    ctx?: Context<AxiosFlags>
+    method: HttpMethod,
+    url: string,
+    data?: unknown,
+    options?: HttpRequestOptions
+  ): AxiosRequestConfig;
+  override toRequest(
+    ctxOrQueryOrMethod: Context<AxiosFlags> | PreparedStatement<any> | HttpMethod,
+    ctxOrUrl?: Context<AxiosFlags> | string,
+    data?: unknown,
+    options?: HttpRequestOptions
   ): AxiosRequestConfig {
+    if (typeof ctxOrQueryOrMethod === "string") {
+      const req: AxiosRequestConfig = Object.assign(
+        {
+          method: ctxOrQueryOrMethod,
+          url: ctxOrUrl as string,
+        },
+        this.toAxiosRequestOptions(options)
+      );
+      if (typeof data !== "undefined") req.data = data;
+      return req;
+    }
+
     let query: PreparedStatement<any> | undefined;
     let context: Context<AxiosFlags> | undefined;
 
-    if (ctxOrQuery instanceof Context) {
-      context = ctxOrQuery;
+    if (ctxOrQueryOrMethod instanceof Context) {
+      context = ctxOrQueryOrMethod;
       query = undefined; // In this overload, ctx is actually the query
     } else {
-      query = ctxOrQuery;
-      context = ctx;
+      query = ctxOrQueryOrMethod;
+      context = ctxOrUrl as Context<AxiosFlags> | undefined;
     }
 
     const req: AxiosRequestConfig = {};
@@ -119,6 +138,21 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
     return req;
   }
+
+  private toAxiosRequestOptions(
+    options?: HttpRequestOptions
+  ): AxiosRequestConfig {
+    if (!options) return {};
+    const { includeCredentials, ...rest } = options;
+    const req: AxiosRequestConfig = Object.assign({}, rest);
+    if (
+      typeof includeCredentials !== "undefined" &&
+      typeof req.withCredentials === "undefined"
+    ) {
+      req.withCredentials = includeCredentials;
+    }
+    return req;
+  }
   /**
    * @description Sends an HTTP request using Axios
    * @summary Implementation of the abstract request method from HttpAdapter.
@@ -129,7 +163,7 @@ export class AxiosHttpAdapter extends HttpAdapter<
    */
   override async request<V>(
     details: AxiosRequestConfig,
-    ...args: ContextualArgs<Context<AxiosFlags>>
+    ...args: MaybeContextualArg<Context<AxiosFlags>>
   ): Promise<V> {
     let overrides = {};
     try {
@@ -151,8 +185,20 @@ export class AxiosHttpAdapter extends HttpAdapter<
     method: OperationKeys | string,
     res: any
   ): any {
-    if (!res.status && method !== PersistenceKeys.STATEMENT)
+    if (!res?.status && method !== PersistenceKeys.STATEMENT) {
+      const passthroughMethods = new Set<string>([
+        OperationKeys.CREATE,
+        OperationKeys.READ,
+        OperationKeys.UPDATE,
+        OperationKeys.DELETE,
+        BulkCrudOperationKeys.CREATE_ALL,
+        BulkCrudOperationKeys.READ_ALL,
+        BulkCrudOperationKeys.UPDATE_ALL,
+        BulkCrudOperationKeys.DELETE_ALL,
+      ]);
+      if (passthroughMethods.has(String(method))) return res;
       throw new InternalError("this should be impossible");
+    }
     if (res.status >= 400)
       throw this.parseError((res.error as Error) || (res.status as any));
     const body = this.normalizeResponseBody(res);
@@ -219,244 +265,6 @@ export class AxiosHttpAdapter extends HttpAdapter<
       }
     }
     return candidate;
-  }
-
-  /**
-   * @description Creates a new resource via HTTP POST
-   * @summary Implementation of the abstract create method from HttpAdapter.
-   * This method sends a POST request to the specified endpoint with the model data.
-   * @param {string} tableName - The name of the table or endpoint
-   * @param {string|number} id - The identifier for the resource (not used in URL for POST)
-   * @param {Record<string, any>} model - The data model to create
-   * @return {Promise<Record<string, any>>} A promise that resolves with the created resource
-   */
-  override async create<M extends Model>(
-    tableName: Constructor<M>,
-    id: PrimaryKeyType,
-    model: M,
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>> {
-    const { log, ctx } = this.logCtx(args, this.create);
-    try {
-      const url = this.url(
-        tableName,
-        this.extractIdArgs(tableName, id as string)
-      );
-      const cfg = this.toRequest(ctx);
-      log.debug(
-        `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
-      );
-      const result = await this.request(
-        {
-          url,
-          method: "POST",
-          data: JSON.stringify(
-            Object.assign({}, model, {
-              [ModelKeys.ANCHOR]: tableName.name,
-            })
-          ),
-          ...cfg,
-        },
-        ctx
-      );
-      return result as any;
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  override async createAll<M extends Model>(
-    clazz: Constructor<M>,
-    id: PrimaryKeyType[],
-    model: M[],
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>[]> {
-    const { log, ctx } = this.logCtx(args, this.createAll);
-    try {
-      const url = this.url(clazz, ["bulk"]);
-      const cfg = this.toRequest(ctx);
-      log.debug(
-        `POSTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
-      );
-      return this.request(
-        {
-          url,
-          method: "POST",
-          data: JSON.stringify(
-            model.map((m: M) =>
-              Object.assign({}, m, {
-                [ModelKeys.ANCHOR]: clazz.name,
-              })
-            )
-          ),
-          ...cfg,
-        },
-        ctx
-      );
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  /**
-   * @description Retrieves a resource by ID via HTTP GET
-   * @summary Implementation of the abstract read method from HttpAdapter.
-   * This method sends a GET request to the specified endpoint with the ID as a query parameter.
-   * @param {string} tableName - The name of the table or endpoint
-   * @param {string|number|bigint} id - The identifier for the resource to retrieve
-   * @return {Promise<Record<string, any>>} A promise that resolves with the retrieved resource
-   */
-  override async read<M extends Model>(
-    tableName: Constructor<M> | string,
-    id: PrimaryKeyType,
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>> {
-    const { log, ctx } = this.logCtx(args, this.read);
-    try {
-      const url = this.url(
-        tableName,
-        this.extractIdArgs(tableName, id as string)
-      );
-      const cfg = this.toRequest(ctx);
-      log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return await this.request({ url, method: "GET", ...cfg }, ctx);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-  override async readAll<M extends Model>(
-    tableName: Constructor<M> | string,
-    ids: PrimaryKeyType[],
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>[]> {
-    const { log, ctx } = this.logCtx(args, this.readAll);
-    try {
-      const url = this.url(tableName, ["bulk"], { ids: ids } as any);
-      const cfg = this.toRequest(ctx);
-      log.debug(`GETing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return await this.request({ url, method: "GET", ...cfg }, ctx);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  /**
-   * @description Updates an existing resource via HTTP PUT
-   * @summary Implementation of the abstract update method from HttpAdapter.
-   * This method sends a PUT request to the specified endpoint with the updated model data.
-   * @param {string} tableName - The name of the table or endpoint
-   * @param {string|number} id - The identifier for the resource (not used in URL for PUT)
-   * @param {Record<string, any>} model - The updated data model
-   * @return {Promise<Record<string, any>>} A promise that resolves with the updated resource
-   */
-  override async update<M extends Model>(
-    tableName: Constructor<M>,
-    id: PrimaryKeyType,
-    model: Record<string, any>,
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>> {
-    const { log, ctx } = this.logCtx(args, this.update);
-    try {
-      const url = this.url(
-        tableName,
-        this.extractIdArgs(tableName, id as string)
-      );
-      const cfg = this.toRequest(ctx);
-      log.debug(
-        `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
-      );
-      return await this.request(
-        {
-          url,
-          method: "PUT",
-          data: JSON.stringify(
-            Object.assign({}, model, {
-              [ModelKeys.ANCHOR as keyof typeof model]: tableName.name,
-            })
-          ),
-          ...cfg,
-        },
-        ctx
-      );
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  override async updateAll<M extends Model>(
-    tableName: Constructor<M>,
-    ids: PrimaryKeyType[],
-    model: M[],
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>[]> {
-    const { log, ctx } = this.logCtx(args, this.updateAll);
-    try {
-      const url = this.url(tableName, ["bulk"]);
-      const cfg = this.toRequest(ctx);
-      log.debug(
-        `PUTing to ${url} with ${JSON.stringify(model)} and cfg ${JSON.stringify(cfg)}`
-      );
-      return this.request(
-        {
-          url,
-          method: "PUT",
-          data: JSON.stringify(
-            model.map((m: M) =>
-              Object.assign({}, m, {
-                [ModelKeys.ANCHOR]: tableName.name,
-              })
-            )
-          ),
-          ...cfg,
-        },
-        ctx
-      );
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  /**
-   * @description Deletes a resource by ID via HTTP DELETE
-   * @summary Implementation of the abstract delete method from HttpAdapter.
-   * This method sends a DELETE request to the specified endpoint with the ID as a query parameter.
-   * @param {string} tableName - The name of the table or endpoint
-   * @param {string|number|bigint} id - The identifier for the resource to delete
-   * @return {Promise<Record<string, any>>} A promise that resolves with the deletion result
-   */
-  override async delete<M extends Model>(
-    tableName: Constructor<M> | string,
-    id: PrimaryKeyType,
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>> {
-    const { log, ctx } = this.logCtx(args, this.delete);
-    try {
-      const url = this.url(
-        tableName,
-        this.extractIdArgs(tableName, id as string)
-      );
-      const cfg = this.toRequest(ctx);
-      log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return await this.request({ url, method: "DELETE", ...cfg }, ctx);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
-  }
-
-  override async deleteAll<M extends Model>(
-    tableName: Constructor<M> | string,
-    ids: PrimaryKeyType[],
-    ...args: ContextualArgs<Context<AxiosFlags>>
-  ): Promise<Record<string, any>[]> {
-    const { log, ctx } = this.logCtx(args, this.delete);
-    try {
-      const url = this.url(tableName, ["bulk"], { ids: ids } as any);
-      const cfg = this.toRequest(ctx);
-      log.debug(`DELETEing from ${url} and cfg ${JSON.stringify(cfg)}`);
-      return await this.request({ url, method: "DELETE", ...cfg }, ctx);
-    } catch (e: any) {
-      throw this.parseError(e);
-    }
   }
 
   override parseError<E extends BaseError>(err: Error, ...args: any[]): E {

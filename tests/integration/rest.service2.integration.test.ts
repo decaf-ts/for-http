@@ -56,7 +56,7 @@ describe("RestService integration", () => {
       expect.objectContaining({
         method: "POST",
         url: expect.stringContaining(`/${toKebabCase(Model.tableName(Dummy))}`),
-        data: expect.stringContaining("Dummy"),
+        data: expect.stringContaining(`"id":"1"`),
       })
     );
     mock.mockClear();

@@ -140,4 +140,82 @@ describe("Axios adapter", function () {
       })
     );
   });
+
+  it("supports simple get/post/put/delete requests with HttpRequestOptions", async function () {
+    requestMock.mockImplementation(async (details: any) => ({
+      status: 200,
+      body: {
+        method: details.method,
+        url: details.url,
+        data: details.data,
+        timeout: details.timeout,
+        withCredentials: details.withCredentials,
+        responseType: details.responseType,
+      },
+    }));
+
+    const getResult = await adapter.get("http://localhost:8080/ping", {
+      timeout: 1500,
+      includeCredentials: true,
+      responseType: "json",
+      headers: { "x-custom": "1" },
+      validateStatus: (status) => status < 500,
+      transformResponse: (data) => data,
+    });
+    expect(getResult).toEqual(
+      expect.objectContaining({
+        code: 200,
+        data: expect.objectContaining({
+          method: "GET",
+          url: "http://localhost:8080/ping",
+          timeout: 1500,
+          withCredentials: true,
+        }),
+      })
+    );
+
+    const postResult = await adapter.post(
+      "http://localhost:8080/ping",
+      { ok: true },
+      { includeCredentials: false }
+    );
+    expect(postResult).toEqual(
+      expect.objectContaining({
+        code: 200,
+        data: expect.objectContaining({
+          method: "POST",
+          data: { ok: true },
+          withCredentials: false,
+        }),
+      })
+    );
+
+    const putResult = await adapter.put(
+      "http://localhost:8080/ping",
+      { ok: "updated" },
+      { timeout: 50 }
+    );
+    expect(putResult).toEqual(
+      expect.objectContaining({
+        code: 200,
+        data: expect.objectContaining({
+          method: "PUT",
+          data: { ok: "updated" },
+        }),
+      })
+    );
+
+    const deleteResult = await adapter.delete("http://localhost:8080/ping", {
+      headers: { "x-delete": "1" },
+    });
+    expect(deleteResult).toEqual(
+      expect.objectContaining({
+        code: 200,
+        data: expect.objectContaining({
+          method: "DELETE",
+          url: "http://localhost:8080/ping",
+        }),
+      })
+    );
+  });
 });

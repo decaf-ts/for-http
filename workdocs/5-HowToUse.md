@@ -36,6 +36,30 @@ const config: HttpConfig = { protocol: "https", host: "api.example.com" };
 const adapter = new AxiosHttpAdapter(config);
 ```
 
+## Simple request helpers and options
+
+Description: Use adapter-level `get/post/put/delete` helpers for raw endpoint calls with typed request options.
+
+```ts
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { HttpConfig, HttpRequestOptions } from "@decaf-ts/for-http";
+
+const config: HttpConfig = { protocol: "https", host: "api.example.com" };
+const adapter = new AxiosHttpAdapter(config);
+
+const opts: HttpRequestOptions = {
+  timeout: 3000,
+  headers: { Authorization: "Bearer <token>" },
+  includeCredentials: true, // mapped to axios withCredentials
+  validateStatus: (status) => status < 500,
+};
+
+const users = await adapter.get("/v1/users", opts);
+const created = await adapter.post("/v1/users", { name: "Alice" }, opts);
+const updated = await adapter.put("/v1/users/u1", { name: "Alice A." }, opts);
+const removed = await adapter.delete("/v1/users/u1", opts);
+```
+
 ## Service: RestService
 
 Description: Lightweight, model-centric service that delegates CRUD and bulk operations to the adapter.
