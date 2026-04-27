@@ -29,7 +29,7 @@ A lightweight HTTP adapter layer for decaf-ts that enables CRUD-style repositori
 
 Documentation available [here](https://decaf-ts.github.io/for-http/)
 
-Minimal size: 6.8 KB kb gzipped
+Minimal size: 7.1 KB kb gzipped
 
 
 # decaf-ts/for-http — Detailed Description
@@ -45,13 +45,11 @@ Core goals
 Key building blocks
 - HttpConfig: A minimal connection config with protocol and host.
 - HttpFlags: Extends RepositoryFlags to include optional HTTP headers.
-- HttpRequestOptions: for-http owned request options aligned with Axios semantics (`timeout`, `headers`, `transformResponse`, `validateStatus`, `includeCredentials`, and more).
 - HttpAdapter<Y, CON, Q, F, C>:
   - Extends the core Adapter to focus on HTTP.
   - Adds default flags() with headers support.
   - Provides URL building (protected url()) and error parsing (parseError()).
   - Declares abstract request(), create(), read(), update(), delete().
-  - Provides simple request helpers: `get(url, options?)`, `post(url, data, options?)`, `put(url, data, options?)`, and `delete(url, options?)` (via overload).
   - Declares optional/unsupported-by-default raw(), Sequence(), Statement(), parseCondition() that concrete adapters may implement if needed.
   - repository() returns RestService as the default repository/service implementation for this adapter type.
 - RestService<M, Q, A, F, C>:
@@ -320,6 +318,39 @@ class MyHttpAdapter extends HttpAdapter<HttpConfig, MyClient, MyRequestConfig, M
 }
 ```
 
+## Task Engine & Migration tips
+
+`HttpAdapter` instances slot into `MigrationService.migrateAdapters` just like any other adapter. Provide per-flavour handlers when running migrations so the system can persist the last seen version (a file, another database, or a remote endpoint). When `taskMode` is enabled, spin up a separate `RamAdapter` for the `TaskService` (its alias must never match a migrating adapter), then call `MigrationService.migrateAdapters([...], { taskMode: true, taskService, handlers: {...}})` and use `migration.track()` to wait on each version.
+
+```ts
+const handlers = {
+  http: {
+    async retrieveLastVersion() {
+      return await versionStore.read("http");
+    },
+    async setCurrentVersion(version: string) {
+      await versionStore.write("http", version);
+    },
+  },
+};
+
+const migrations = await MigrationService.migrateAdapters([httpAdapter], {
+  flavours: ["http"],
+  toVersion: "1.1.0",
+  taskMode: true,
+  taskService,
+  handlers,
+});
+for (const migration of migrations) {
+  await migration.track();
+}
+```
+
+`setCurrentVersion` runs after every fully applied version (once at the end when running inline, immediately after each tracked task in `taskMode`), so the recorded `currentVersion` always equals the last completed hop and `retrieveLastVersion` can skip it on restart. Failures leave the version unchanged; call `MigrationService.retry(taskId)` to reset the `TaskModel` to `PENDING`, clear the error/lease metadata, and rerun the pending version without touching already finished ones.
+
+Control ordering through `@migration`: the `reference` string is your log-level semver label, `precedence` lets you force ordering between migrations sharing the same version/flavour, `flavour` restricts execution to specific adapters, and `rules` are async predicates that can skip a migration when its prerequisites are missing.
+
+## Constants and Types (axios)
 ## Constants and Types (axios)
 
 Description: Utilities specific to the Axios implementation.

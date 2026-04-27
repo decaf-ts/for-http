@@ -222,6 +222,39 @@ class MyHttpAdapter extends HttpAdapter<HttpConfig, MyClient, MyRequestConfig, M
 }
 ```
 
+## Task Engine & Migration tips
+
+`HttpAdapter` instances slot into `MigrationService.migrateAdapters` just like any other adapter. Provide per-flavour handlers when running migrations so the system can persist the last seen version (a file, another database, or a remote endpoint). When `taskMode` is enabled, spin up a separate `RamAdapter` for the `TaskService` (its alias must never match a migrating adapter), then call `MigrationService.migrateAdapters([...], { taskMode: true, taskService, handlers: {...}})` and use `migration.track()` to wait on each version.
+
+```ts
+const handlers = {
+  http: {
+    async retrieveLastVersion() {
+      return await versionStore.read("http");
+    },
+    async setCurrentVersion(version: string) {
+      await versionStore.write("http", version);
+    },
+  },
+};
+
+const migrations = await MigrationService.migrateAdapters([httpAdapter], {
+  flavours: ["http"],
+  toVersion: "1.1.0",
+  taskMode: true,
+  taskService,
+  handlers,
+});
+for (const migration of migrations) {
+  await migration.track();
+}
+```
+
+`setCurrentVersion` runs after every fully applied version (once at the end when running inline, immediately after each tracked task in `taskMode`), so the recorded `currentVersion` always equals the last completed hop and `retrieveLastVersion` can skip it on restart. Failures leave the version unchanged; call `MigrationService.retry(taskId)` to reset the `TaskModel` to `PENDING`, clear the error/lease metadata, and rerun the pending version without touching already finished ones.
+
+Control ordering through `@migration`: the `reference` string is your log-level semver label, `precedence` lets you force ordering between migrations sharing the same version/flavour, `flavour` restricts execution to specific adapters, and `rules` are async predicates that can skip a migration when its prerequisites are missing.
+
+## Constants and Types (axios)
 ## Constants and Types (axios)
 
 Description: Utilities specific to the Axios implementation.
