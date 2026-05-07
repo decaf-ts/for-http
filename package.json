@@ -5,15 +5,19 @@
   "type": "module",
   "exports": {
     ".": {
-      "require": "./lib/index.cjs",
-      "import": "./lib/esm/index.js"
+      "require": "./lib/cjs/index.cjs",
+      "import": "./lib/esm/index.js",
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/esm/index.js"
     },
     "./axios": {
-      "require": "./lib/axios/index.cjs",
-      "import": "./lib/esm/axios/index.js"
+      "require": "./lib/cjs/axios/index.cjs",
+      "import": "./lib/esm/axios/index.js",
+      "types": "./lib/types/axios/index.d.ts",
+      "default": "./lib/esm/axios/index.js"
     }
   },
-  "types": "lib/index.d.ts",
+  "types": "./lib/types/index.d.ts",
   "scripts": {
     "do-install": "NPM_TOKEN=$(cat .npmtoken) npm install",
     "update-dependencies": "PREFIX=\"decaf-ts\"; npm ls | grep \"$PREFIX\" | awk -F/ '{print $NF}' | sed 's/@.*//' | xargs -I package npm update @\"$PREFIX\"/package",
@@ -94,5 +98,8 @@
     "@decaf-ts/transactional-decorators": "latest",
     "axios": "^1.15.2",
     "event-source-plus": "^0.1.15"
-  }
+  },
+  "main": "./lib/cjs/index.cjs",
+  "module": "./lib/esm/index.js",
+  "sideEffects": false
 }

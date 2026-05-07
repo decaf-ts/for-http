@@ -9,7 +9,7 @@ import {
   table,
   UnsupportedError,
 } from "@decaf-ts/core";
-import { RamAdapter } from "../../node_modules/@decaf-ts/core/lib/ram/RamAdapter.cjs";
+import { RamAdapter } from "@decaf-ts/core/ram";
 import {
   maxlength,
   min,
