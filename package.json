@@ -5,19 +5,29 @@
   "type": "module",
   "exports": {
     ".": {
-      "require": "./lib/cjs/index.cjs",
-      "import": "./lib/esm/index.js",
-      "types": "./lib/types/index.d.ts",
+      "import": {
+        "types": "./lib/types/index.d.mts",
+        "default": "./lib/esm/index.js"
+      },
+      "require": {
+        "types": "./lib/types/index.d.cts",
+        "default": "./lib/cjs/index.cjs"
+      },
       "default": "./lib/esm/index.js"
     },
     "./axios": {
-      "require": "./lib/cjs/axios/index.cjs",
-      "import": "./lib/esm/axios/index.js",
-      "types": "./lib/types/axios/index.d.ts",
+      "import": {
+        "types": "./lib/types/axios/index.d.mts",
+        "default": "./lib/esm/axios/index.js"
+      },
+      "require": {
+        "types": "./lib/types/axios/index.d.cts",
+        "default": "./lib/cjs/axios/index.cjs"
+      },
       "default": "./lib/esm/axios/index.js"
     }
   },
-  "types": "./lib/types/index.d.ts",
+  "types": "./lib/types/index.d.mts",
   "scripts": {
     "do-install": "NPM_TOKEN=$(cat .npmtoken) npm install",
     "update-dependencies": "PREFIX=\"decaf-ts\"; npm ls | grep \"$PREFIX\" | awk -F/ '{print $NF}' | sed 's/@.*//' | xargs -I package npm update @\"$PREFIX\"/package",
