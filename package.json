@@ -25,6 +25,17 @@
         "default": "./lib/cjs/axios/index.cjs"
       },
       "default": "./lib/esm/axios/index.js"
+    },
+    "./server": {
+      "import": {
+        "types": "./lib/types/server/index.d.mts",
+        "default": "./lib/esm/server/index.js"
+      },
+      "require": {
+        "types": "./lib/types/server/index.d.cts",
+        "default": "./lib/cjs/server/index.cjs"
+      },
+      "default": "./lib/esm/server/index.js"
     }
   },
   "types": "./lib/types/index.d.mts",
@@ -111,5 +122,12 @@
   },
   "main": "./lib/cjs/index.cjs",
   "module": "./lib/esm/index.js",
-  "sideEffects": false
+  "sideEffects": [
+    "./lib/esm/index.js",
+    "./lib/cjs/index.cjs",
+    "./lib/esm/overrides/index.js",
+    "./lib/esm/overrides/overrides.js",
+    "./lib/cjs/overrides/index.cjs",
+    "./lib/cjs/overrides/overrides.cjs"
+  ]
 }
