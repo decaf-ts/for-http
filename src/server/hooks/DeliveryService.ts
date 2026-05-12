@@ -2,6 +2,7 @@ import {
   Adapter,
   AllOperationKeys,
   ClientBasedService,
+  ConfigOf,
   Context,
   ContextOf,
   ContextualArgs,
@@ -16,8 +17,9 @@ import {
   UnsupportedError,
 } from "@decaf-ts/core";
 import { HookKey, WebhookDeliveryMode, WebhookStatus } from "./constants";
-import { type Constructor, Metadata } from "@decaf-ts/decoration";
+import { type Constructor, Metadata, uses } from "@decaf-ts/decoration";
 import { Model } from "@decaf-ts/decorator-validation";
+import { OperationKeys } from "@decaf-ts/db-decorators";
 import { WebhookDelivery } from "./models/WebhookDelivery";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
 import { computeNextAttempt, signWebhookPayload } from "./utils";
@@ -27,9 +29,7 @@ import { getWebhookFilter, WebhookObserver } from "./observers";
 import { DeliveryServiceConfig } from "./types";
 import { WebhookPublisherService } from "./PublisherService";
 import { HttpAdapter } from "../../adapter";
-import { HttpResponse } from "../../types";
-
-
+import { WebhookSubscription } from "./models/index";
 
 @service()
 export class WebhookDeliveryService<
@@ -55,10 +55,25 @@ export class WebhookDeliveryService<
   protected controller?: AbortController;
 
   private _observer?: WebhookObserver;
+  private _http?: HttpAdapter<any, any, any, any>;
 
   protected get observer() {
-    if (!this._observer) this._observer = new this.config.observer(this.config);
+    if (!this._observer)
+      this._observer = new this.config.observer!(this.config);
     return this._observer;
+  }
+
+  protected get http(): HttpAdapter<any, any, any, any> {
+    if (!this._http) {
+      if (!this.config.httpAdapter)
+        throw new InternalError("HttpAdapter is required");
+      if (this.config.httpAdapter instanceof HttpAdapter) {
+        this._http = this.config.httpAdapter;
+      } else {
+        this._http = new this.config.httpAdapter(this.config.httpConfig || {});
+      }
+    }
+    return this._http;
   }
 
   private _filter?: ObserverFilter;
@@ -294,39 +309,41 @@ export class WebhookDeliveryService<
     const now = new Date();
 
     try {
-      const response: HttpResponse = this.client["parseResponse"](
+      const rawResponse = await this.http.post(delivery.targetUrl, rawBody, {
+        timeout: 10_000,
+        headers: {
+          "content-type": "application/json",
+          "x-webhook-id": event.id,
+          "x-webhook-topic": event.topic,
+          "x-webhook-signature": signature,
+        },
+        transformResponse: [(v: any) => v],
+        validateStatus: () => true,
+      });
+      const response = this.http["parseResponse"](
         undefined,
-        "CREATE",
-        await this.client.post(delivery.targetUrl, rawBody, {
-          timeout: 10_000,
-          headers: {
-            "content-type": "application/json",
-            "x-webhook-id": event.id,
-            "x-webhook-topic": event.topic,
-            "x-webhook-signature": signature,
-          },
-          transformResponse: [(v: any) => v],
-          validateStatus: () => true,
-        })
+        OperationKeys.CREATE,
+        rawResponse
       );
 
+      log.debug("rawResponse", rawResponse);
       delivery.attempts += 1;
       delivery.lastAttemptAt = now;
-      delivery.responseStatus = response.code;
+      delivery.responseStatus = rawResponse.code;
       delivery.responseBody =
-        typeof response.data === "string"
-          ? response.data.slice(0, 50_000)
-          : JSON.stringify(response.data).slice(0, 50_000);
+        typeof response === "string"
+          ? response.slice(0, 50_000)
+          : JSON.stringify(response).slice(0, 50_000);
       delivery.errorMessage = undefined;
 
-      if (response.code >= 200 && response.code < 300) {
+      if (rawResponse.code >= 200 && rawResponse.code < 300) {
         delivery.status = WebhookStatus.COMPLETED;
       } else {
         delivery.status =
           delivery.attempts >= delivery.maxAttempts
             ? WebhookStatus.FAILED
             : WebhookStatus.FAILED;
-        delivery.errorMessage = `HTTP ${response.code}`;
+        delivery.errorMessage = `HTTP ${rawResponse.code}`;
         delivery.nextAttemptAt = computeNextAttempt(delivery.attempts);
       }
 
@@ -479,13 +496,26 @@ export class WebhookDeliveryService<
     if (!cfg) throw new InternalError(`No config found`);
     const models = this.models();
     const flavours = [...new Set(models.map((m) => Metadata.flavourOf(m)))];
-    const topics = models.map((m) => Model.hooks(m)).flat();
-    const client = new cfg.adapter(cfg.config, "hooks");
+    const topics = cfg.topics || models.map((m) => Model.hooks(m)).flat();
+    let client: A, clientConf: ConfigOf<A>;
+    if (cfg.adapter instanceof Adapter) {
+      client = cfg.adapter as A;
+      uses(client.alias)(WebhookDelivery);
+      uses(client.alias)(WebhookEventRecord);
+      uses(client.alias)(WebhookSubscription);
+      clientConf = cfg.config || client.config;
+    } else {
+      client = new cfg.adapter(cfg.config, HookKey);
+      uses(HookKey)(WebhookDelivery);
+      uses(HookKey)(WebhookEventRecord);
+      uses(HookKey)(WebhookSubscription);
+      clientConf = cfg.config as ConfigOf<A>;
+    }
     return {
       client: client,
       config: {
-        adapter: cfg.adapter,
-        config: cfg.config,
+        adapter: client.constructor as Constructor<A>,
+        config: clientConf,
         mode: cfg.mode || WebhookDeliveryMode.POLLING,
         batchSize: cfg.batchSize || 50,
         pollIntervalMs: cfg.pollIntervalMs || 5000,

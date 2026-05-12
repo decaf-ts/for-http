@@ -27,7 +27,7 @@ export class WebhookSubscription extends Model {
   @column()
   @required()
   @index([OrderDirection.ASC, OrderDirection.DSC])
-  @description("subscription topic eg <model>.create, <model>.*, etc")
+  @description("subscription topic eg <model>.created, <model>.*, etc")
   topic!: string;
 
   @column()

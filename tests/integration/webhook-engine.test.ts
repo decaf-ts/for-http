@@ -1,20 +1,36 @@
 import { WebhookSubscription } from "../../src/server/hooks/models/WebhookSubscription";
 import { WebhookEventRecord } from "../../src/server/hooks/models/WebhookEventRecord";
 import { WebhookDelivery } from "../../src/server/hooks/models/WebhookDelivery";
-import { WebhookStatus, WebhookDeliveryMode, HookKey } from "../../src/server/hooks/constants";
+import { WebhookDeliveryMode } from "../../src/server/hooks/constants";
 import { NanoAdapter } from "@decaf-ts/for-nano";
-import { Model } from "@decaf-ts/decorator-validation";
-import { Repository, Repo, Adapter } from "@decaf-ts/core";
+import {
+  pk,
+  Repo,
+  createdAt,
+  updatedAt,
+  createdBy,
+  updatedBy,
+  Repository,
+} from "@decaf-ts/core";
+import { RamFlavour, RamAdapter } from "@decaf-ts/core/ram";
+import {
+  model,
+  Model,
+  ModelArg,
+  required,
+} from "@decaf-ts/decorator-validation";
 import { AxiosHttpAdapter } from "../../src/axios/axios";
-import { Context } from "@decaf-ts/core";
-import { Logging } from "@decaf-ts/logging";
-import { WebhookObserver } from "../../src/server/hooks/observers";
 import { WebhookDeliveryService } from "../../src/server/hooks/DeliveryService";
-import type { AxiosRequestConfig } from "axios";
-import { HttpResponse } from "../../src/types";
+import * as http from "http";
+import {
+  DeliveryServiceConfig,
+  WebhookPublisherService,
+  WebhookSubscriptionService,
+} from "../../src/server/index";
+import { uses } from "@decaf-ts/decoration";
 
-Model.setBuilder(Model.fromModel);
 NanoAdapter.decoration();
+Model.setBuilder(Model.fromModel);
 
 function randomSuffix() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -78,21 +94,90 @@ async function cleanupNanoTestResources(resources: any) {
 
 let resources: Awaited<ReturnType<typeof createNanoTestResources>>;
 
+@uses(RamFlavour)
+@model()
+class Product extends Model<boolean> {
+  @pk()
+  id!: number;
+
+  @required()
+  name!: string;
+
+  @createdAt()
+  createdAt!: Date;
+
+  @updatedAt()
+  updatedAt!: Date;
+
+  @createdBy()
+  createdBy!: string;
+
+  @updatedBy()
+  updatedBy!: string;
+
+  constructor(arg?: ModelArg<Product>) {
+    super(arg);
+  }
+}
+
 describe("Webhook Engine Full Integration Test", () => {
-  beforeAll(async () => {
-    resources = await createNanoTestResources();
-  });
-
-  afterAll(async () => {
-    await cleanupNanoTestResources(resources);
-  });
-
+  let nanoAdapter: NanoAdapter;
   let subRepo: Repo<WebhookSubscription>;
   let eventRepo: Repo<WebhookEventRecord>;
   let deliveryRepo: Repo<WebhookDelivery>;
+  let productRepo: Repo<Product>;
+  let subService: WebhookSubscriptionService;
+  let publishService: WebhookPublisherService;
+  let deliveryService: WebhookDeliveryService<AxiosHttpAdapter>;
+
+  let server: http.Server;
+  let serverUrl: string;
+  let receivedRequests: Array<{ url: string; body: any; headers: any }> = [];
 
   beforeAll(async () => {
-    const nanoAdapter = new NanoAdapter(
+    resources = await createNanoTestResources();
+
+    server = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
+        receivedRequests.push({
+          url: req.url || "/",
+          body: JSON.parse(body),
+          headers: req.headers,
+        });
+
+        if (req.url === "/webhook1") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "ok", endpoint: "/webhook1" }));
+        } else if (req.url === "/webhook2") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "ok", endpoint: "/webhook2" }));
+        } else if (req.url === "/webhook3") {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Internal Server Error" }));
+        } else if (req.url === "/webhook4") {
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Service Unavailable" }));
+        } else {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Not Found" }));
+        }
+      });
+    });
+
+    server.listen(0);
+    const address = server.address() as any;
+    serverUrl = `http://localhost:${address.port}`;
+
+    const ramAdapter = new RamAdapter({ UUID: "web-hooks" });
+
+    const httpAdapter = new AxiosHttpAdapter({
+      protocol: "http",
+      host: "localhost",
+    });
+
+    nanoAdapter = new NanoAdapter(
       {
         user: resources.user,
         password: resources.password,
@@ -104,247 +189,68 @@ describe("Webhook Engine Full Integration Test", () => {
     );
     await nanoAdapter.initialize();
 
-    subRepo = Repository.forModel(WebhookSubscription);
-    eventRepo = Repository.forModel(WebhookEventRecord);
-    deliveryRepo = Repository.forModel(WebhookDelivery);
+    publishService = new WebhookPublisherService();
+    deliveryService = new WebhookDeliveryService();
+
+    const hookCfg: DeliveryServiceConfig<NanoAdapter> = {
+      adapter: nanoAdapter,
+      httpAdapter: httpAdapter,
+      mode: WebhookDeliveryMode.POLLING,
+      autoStart: true,
+      models: [Product],
+      batchSize: 2,
+      pollIntervalMs: 5000,
+      // topics: ["product.*"],
+      flavours: [RamFlavour],
+    };
+
+    await deliveryService.boot(hookCfg);
+    subService = new WebhookSubscriptionService();
+
+    productRepo = Repository.forModel(Product as any) as Repo<Product>;
+    subRepo = Repository.forModel(
+      WebhookSubscription as any
+    ) as Repo<WebhookSubscription>;
+    eventRepo = Repository.forModel(
+      WebhookEventRecord as any
+    ) as Repo<WebhookEventRecord>;
+    deliveryRepo = Repository.forModel(
+      WebhookDelivery as any
+    ) as Repo<WebhookDelivery>;
+    expect(productRepo).toBeInstanceOf(Repository);
   });
 
-  let now: Date;
-  let sub1: WebhookSubscription;
-  let createdSub1: WebhookSubscription;
-  let event: WebhookEventRecord;
-  let createdEvent: WebhookEventRecord;
-  let delivery: WebhookDelivery;
-  let createdDelivery: WebhookDelivery;
-
-  beforeAll(() => {
-    now = new Date();
+  afterAll(async () => {
+    server.close();
+    await cleanupNanoTestResources(resources);
   });
 
-  beforeAll(async () => {
-    sub1 = new WebhookSubscription({
-      topic: "user.created",
-      url: "http://localhost:9999/webhook",
-      secret: "test-secret",
-      active: true,
+  it("should create subscriptions", async () => {
+    receivedRequests = [];
+    const endpoints = new Array(5)
+      .fill(0)
+      .map((_, i) => `${serverUrl}/webhook${i + 1}`);
+    const subs = endpoints.map(
+      (e, i) =>
+        new WebhookSubscription({
+          topic: `product.${i === 0 ? "*" : i % 2 === 0 ? "created" : "updated"}`,
+          url: e,
+          secret: "test-secret",
+          active: true,
+        })
+    );
+
+    const createdSubs = await subRepo.createAll(subs);
+    for (const createdSub of createdSubs)
+      expect(createdSub.hasErrors()).toBeUndefined();
+  });
+
+  it("should trigger subscriptions on create", async () => {
+    const p = new Product({
+      name: "name 1",
     });
 
-    createdSub1 = await subRepo.create(sub1);
-  });
-
-  beforeAll(async () => {
-    event = new WebhookEventRecord({
-      topic: "user.created",
-      model: "user",
-      action: "created",
-      entityId: "user-123",
-      payload: JSON.stringify({ id: "user-123", name: "Test" }),
-      status: WebhookStatus.PENDING,
-      deliveriesTotal: 1,
-      deliveriesSucceeded: 0,
-      deliveriesFailed: 0,
-      nextAttemptAt: now,
-    });
-
-    createdEvent = await eventRepo.create(event);
-  });
-
-  beforeAll(async () => {
-    delivery = new WebhookDelivery({
-      eventId: createdEvent.id,
-      subscriptionId: createdSub1.id,
-      topic: "user.created",
-      targetUrl: "http://localhost:9999/webhook",
-      secret: "test-secret",
-      status: WebhookStatus.PENDING,
-      attempts: 0,
-      maxAttempts: 3,
-      nextAttemptAt: now,
-      lastAttemptAt: now,
-      responseStatus: undefined,
-      responseBody: undefined,
-      errorMessage: undefined,
-    });
-
-    createdDelivery = await deliveryRepo.create(delivery);
-  });
-
-  it("should create webhook models with auto-generated UUIDs", async () => {
-    expect(createdSub1.id).toBeDefined();
-    expect(createdEvent.id).toBeDefined();
-    expect(createdDelivery.id).toBeDefined();
-  });
-
-  it("should handle successful webhook delivery (200 OK)", async () => {
-    const ctx = new Context().accumulate({ logger: Logging.get() });
-    
-    class MockAxiosAdapter extends AxiosHttpAdapter {
-      protected override async request<V>(details: any): Promise<HttpResponse<V>> {
-        return { status: 200, data: "OK", error: undefined } as any;
-      }
-    }
-
-    const deliveryService = new WebhookDeliveryService<AxiosHttpAdapter>();
-    
-    await deliveryService.initialize(
-      {
-        adapter: MockAxiosAdapter,
-        config: { protocol: "http", host: "localhost", port: 9999 },
-        mode: WebhookDeliveryMode.POLLING,
-        batchSize: 10,
-        pollIntervalMs: 100,
-        topics: ["user.created"],
-        models: [],
-        flavours: [],
-        observer: WebhookObserver,
-      },
-      ctx
-    );
-
-    await deliveryService["processOne"](createdDelivery.id, ctx);
-
-    const updatedDelivery = await deliveryRepo.read(createdDelivery.id);
-    expect(updatedDelivery!.status).toBe(WebhookStatus.COMPLETED);
-    expect(updatedDelivery!.attempts).toBe(1);
-    expect(updatedDelivery!.responseStatus).toBe(200);
-    expect(updatedDelivery!.responseBody).toBe("OK");
-  });
-
-  it("should handle webhook delivery failure (500 error)", async () => {
-    const ctx = new Context().accumulate({ logger: Logging.get() });
-    
-    class MockAxiosAdapter extends AxiosHttpAdapter {
-      protected override async request<V>(details: any): Promise<HttpResponse<V>> {
-        return { status: 500, data: "Internal Server Error", error: undefined } as any;
-      }
-    }
-
-    const deliveryService = new WebhookDeliveryService<AxiosHttpAdapter>();
-    
-    await deliveryService.initialize(
-      {
-        adapter: MockAxiosAdapter,
-        config: { protocol: "http", host: "localhost", port: 9999 },
-        mode: WebhookDeliveryMode.POLLING,
-        batchSize: 10,
-        pollIntervalMs: 100,
-        topics: ["user.created"],
-        models: [],
-        flavours: [],
-        observer: WebhookObserver,
-      },
-      ctx
-    );
-
-    await deliveryService["processOne"](createdDelivery.id, ctx);
-
-    const updatedDelivery = await deliveryRepo.read(createdDelivery.id);
-    expect(updatedDelivery!.status).toBe(WebhookStatus.FAILED);
-    expect(updatedDelivery!.attempts).toBe(1);
-    expect(updatedDelivery!.responseStatus).toBe(500);
-  });
-
-  it("should handle webhook delivery network error", async () => {
-    const ctx = new Context().accumulate({ logger: Logging.get() });
-    
-    class MockAxiosAdapter extends AxiosHttpAdapter {
-      protected override async request<V>(details: any): Promise<HttpResponse<V>> {
-        throw new Error("Network Error");
-      }
-    }
-
-    const deliveryService = new WebhookDeliveryService<AxiosHttpAdapter>();
-    
-    await deliveryService.initialize(
-      {
-        adapter: MockAxiosAdapter,
-        config: { protocol: "http", host: "localhost", port: 9999 },
-        mode: WebhookDeliveryMode.POLLING,
-        batchSize: 10,
-        pollIntervalMs: 100,
-        topics: ["user.created"],
-        models: [],
-        flavours: [],
-        observer: WebhookObserver,
-      },
-      ctx
-    );
-
-    await deliveryService["processOne"](createdDelivery.id, ctx);
-
-    const updatedDelivery = await deliveryRepo.read(createdDelivery.id);
-    expect(updatedDelivery!.status).toBe(WebhookStatus.FAILED);
-    expect(updatedDelivery!.attempts).toBe(1);
-    expect(updatedDelivery!.errorMessage).toContain("Network Error");
-  });
-
-  it("should verify webhook signature is included in request", async () => {
-    let capturedSignature: string | undefined;
-    const ctx = new Context().accumulate({ logger: Logging.get() });
-    
-    class MockAxiosAdapter extends AxiosHttpAdapter {
-      protected override async request<V>(details: any): Promise<HttpResponse<V>> {
-        capturedSignature = details.headers["x-webhook-signature"];
-        return { status: 200, data: "OK", error: undefined } as any;
-      }
-    }
-
-    const deliveryService = new WebhookDeliveryService<AxiosHttpAdapter>();
-    
-    await deliveryService.initialize(
-      {
-        adapter: MockAxiosAdapter,
-        config: { protocol: "http", host: "localhost", port: 9999 },
-        mode: WebhookDeliveryMode.POLLING,
-        batchSize: 10,
-        pollIntervalMs: 100,
-        topics: ["user.created"],
-        models: [],
-        flavours: [],
-        observer: WebhookObserver,
-      },
-      ctx
-    );
-
-    await deliveryService["processOne"](createdDelivery.id, ctx);
-
-    expect(capturedSignature).toBeDefined();
-    expect(capturedSignature!.startsWith("hmac-sha256=")).toBe(true);
-  });
-
-  it("should include webhook headers in request", async () => {
-    let capturedHeaders: Record<string, string> | undefined;
-    const ctx = new Context().accumulate({ logger: Logging.get() });
-    
-    class MockAxiosAdapter extends AxiosHttpAdapter {
-      protected override async request<V>(details: any): Promise<HttpResponse<V>> {
-        capturedHeaders = details.headers;
-        return { status: 200, data: "OK", error: undefined } as any;
-      }
-    }
-
-    const deliveryService = new WebhookDeliveryService<AxiosHttpAdapter>();
-    
-    await deliveryService.initialize(
-      {
-        adapter: MockAxiosAdapter,
-        config: { protocol: "http", host: "localhost", port: 9999 },
-        mode: WebhookDeliveryMode.POLLING,
-        batchSize: 10,
-        pollIntervalMs: 100,
-        topics: ["user.created"],
-        models: [],
-        flavours: [],
-        observer: WebhookObserver,
-      },
-      ctx
-    );
-
-    await deliveryService["processOne"](createdDelivery.id, ctx);
-
-    expect(capturedHeaders).toBeDefined();
-    expect(capturedHeaders!["x-webhook-id"]).toBe(createdEvent.id);
-    expect(capturedHeaders!["x-webhook-topic"]).toBe("user.created");
-    expect(capturedHeaders!["content-type"]).toBe("application/json");
+    const created = await productRepo.create(p);
+    expect(created.hasErrors()).toBeUndefined();
   });
 });

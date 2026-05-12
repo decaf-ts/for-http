@@ -1,9 +1,10 @@
 import { Constructor } from "@decaf-ts/decoration";
 import { WebhookDeliveryMode } from "./constants";
-import { ConfigOf } from "@decaf-ts/core";
+import { Adapter, ConfigOf } from "@decaf-ts/core";
 import { WebhookObserver } from "./observers";
 import { Model } from "@decaf-ts/decorator-validation";
 import { HttpAdapter } from "../../adapter";
+import { HttpConfig } from "../../types";
 
 export type WebhookAction = "created" | "updated" | "deleted" | "*" | string;
 
@@ -19,17 +20,21 @@ export interface WebhookEnvelope<TPayload = unknown> {
   payload: TPayload;
 }
 
-export type DeliveryServiceConfig<A extends HttpAdapter<any, any, any, any>> = {
-  adapter: Constructor<A>;
-  config: ConfigOf<A>;
+export type DeliveryServiceConfig<A extends Adapter<any, any, any, any>> = {
+  adapter: A | Constructor<A>;
+  config?: ConfigOf<A>;
+  httpAdapter?:
+    | HttpAdapter<any, any, any, any, any>
+    | Constructor<HttpAdapter<any, any, any, any>>;
+  httpConfig?: HttpConfig;
   autoStart: boolean;
   mode: WebhookDeliveryMode;
   batchSize?: number;
   pollIntervalMs?: number;
-  topics: string[];
-  models: Model[];
+  topics?: string[];
+  models: Constructor<Model<boolean>>[];
   flavours: string[];
-  observer: Constructor<WebhookObserver>;
+  observer?: Constructor<WebhookObserver>;
 };
 
 export interface WebhookSignatureMiddlewareConfig {
@@ -55,5 +60,3 @@ export interface SignatureMiddlewareError {
   timestamp: string;
   requestId?: string;
 }
-
-
