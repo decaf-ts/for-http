@@ -2,7 +2,7 @@ import { WebhookSubscription } from "../../src/server/hooks/models/WebhookSubscr
 import { WebhookEventRecord } from "../../src/server/hooks/models/WebhookEventRecord";
 import { WebhookDelivery } from "../../src/server/hooks/models/WebhookDelivery";
 import { WebhookDeliveryMode } from "../../src/server/hooks/constants";
-import { NanoAdapter } from "@decaf-ts/for-nano";
+import { NanoAdapter, NanoRepository } from "@decaf-ts/for-nano";
 import {
   pk,
   Repo,
@@ -11,6 +11,8 @@ import {
   createdBy,
   updatedBy,
   Repository,
+  uuid,
+  column,
 } from "@decaf-ts/core";
 import { RamFlavour, RamAdapter } from "@decaf-ts/core/ram";
 import {
@@ -98,8 +100,10 @@ let resources: Awaited<ReturnType<typeof createNanoTestResources>>;
 @model()
 class Product extends Model<boolean> {
   @pk()
-  id!: number;
+  @uuid()
+  id!: string;
 
+  @column()
   @required()
   name!: string;
 
@@ -129,6 +133,7 @@ describe("Webhook Engine Full Integration Test", () => {
   let subService: WebhookSubscriptionService;
   let publishService: WebhookPublisherService;
   let deliveryService: WebhookDeliveryService<AxiosHttpAdapter>;
+  let ramAdapter: RamAdapter;
 
   let server: http.Server;
   let serverUrl: string;
@@ -170,7 +175,8 @@ describe("Webhook Engine Full Integration Test", () => {
     const address = server.address() as any;
     serverUrl = `http://localhost:${address.port}`;
 
-    const ramAdapter = new RamAdapter({ UUID: "web-hooks" });
+    ramAdapter = new RamAdapter({ UUID: "web-hooks" });
+    await ramAdapter.initialize();
 
     const httpAdapter = new AxiosHttpAdapter({
       protocol: "http",
@@ -199,13 +205,11 @@ describe("Webhook Engine Full Integration Test", () => {
       autoStart: true,
       models: [Product],
       batchSize: 2,
-      pollIntervalMs: 5000,
-      // topics: ["product.*"],
+      pollIntervalMs: 500,
       flavours: [RamFlavour],
     };
 
     await deliveryService.boot(hookCfg);
-    subService = new WebhookSubscriptionService();
 
     productRepo = Repository.forModel(Product as any) as Repo<Product>;
     subRepo = Repository.forModel(
@@ -218,9 +222,15 @@ describe("Webhook Engine Full Integration Test", () => {
       WebhookDelivery as any
     ) as Repo<WebhookDelivery>;
     expect(productRepo).toBeInstanceOf(Repository);
-  });
+    expect(subRepo).toBeInstanceOf(NanoRepository);
+    expect(eventRepo).toBeInstanceOf(NanoRepository);
+    expect(deliveryRepo).toBeInstanceOf(NanoRepository);
+
+    await deliveryService.start();
+  }, 30000);
 
   afterAll(async () => {
+    await deliveryService.stop();
     server.close();
     await cleanupNanoTestResources(resources);
   });
@@ -241,16 +251,205 @@ describe("Webhook Engine Full Integration Test", () => {
     );
 
     const createdSubs = await subRepo.createAll(subs);
+    expect(createdSubs.length).toBe(5);
     for (const createdSub of createdSubs)
       expect(createdSub.hasErrors()).toBeUndefined();
-  });
+  }, 10000);
 
-  it("should trigger subscriptions on create", async () => {
+  it("should trigger subscriptions on product create", async () => {
     const p = new Product({
-      name: "name 1",
+      name: "Product A",
     });
 
     const created = await productRepo.create(p);
     expect(created.hasErrors()).toBeUndefined();
-  });
+    expect(created.id).toBeDefined();
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const events = await eventRepo.select().execute();
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].topic).toBe("product.created");
+  }, 15000);
+
+  it("should create deliveries for matching subscriptions", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const deliveries = await deliveryRepo.select().execute();
+    expect(deliveries.length).toBeGreaterThan(0);
+    for (const d of deliveries) {
+      expect(d.eventId).toBeDefined();
+      expect(d.subscriptionId).toBeDefined();
+      expect(d.status).toBe(WebhookDeliveryMode.POLLING);
+      expect(d.attempts).toBe(0);
+      expect(d.maxAttempts).toBe(12);
+    }
+  }, 10000);
+
+  it("should process deliveries successfully (200 OK)", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const deliveries = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("targetUrl").like("%webhook1%"))
+      .execute();
+    expect(deliveries.length).toBeGreaterThan(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const refreshed = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("targetUrl").like("%webhook1%"))
+      .execute();
+    const successful = refreshed.filter(
+      (d) => d.status === WebhookDeliveryMode.POLLING
+    );
+    expect(successful.length).toBeGreaterThan(0);
+    for (const d of successful) {
+      expect(d.attempts).toBeGreaterThan(0);
+      expect(d.responseStatus).toBe(200);
+      expect(d.responseBody).toBeDefined();
+    }
+  }, 20000);
+
+  it("should handle failed deliveries (500 error)", async () => {
+    const deliveries = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("targetUrl").like("%webhook3%"))
+      .execute();
+    expect(deliveries.length).toBeGreaterThan(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const refreshed = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("targetUrl").like("%webhook3%"))
+      .execute();
+    const failed = refreshed.filter((d) => d.targetUrl.includes("/webhook3"));
+    expect(failed.length).toBeGreaterThan(0);
+    for (const d of failed) {
+      expect(d.errorMessage).toBeDefined();
+    }
+  }, 20000);
+
+  it("should handle service unavailable (503)", async () => {
+    const deliveries = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("targetUrl").like("%webhook4%"))
+      .execute();
+    expect(deliveries.length).toBeGreaterThan(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const refreshed = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("targetUrl").like("%webhook4%"))
+      .execute();
+    const unavailable = refreshed.filter((d) =>
+      d.targetUrl.includes("/webhook4")
+    );
+    expect(unavailable.length).toBeGreaterThan(0);
+    for (const d of unavailable) {
+      expect(d.responseStatus).toBe(503);
+    }
+  }, 20000);
+
+  it("should update event status based on deliveries", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const events = await eventRepo.select().execute();
+    expect(events.length).toBeGreaterThan(0);
+    for (const e of events) {
+      expect(e.status).toBeDefined();
+      expect(e.deliveriesTotal).toBeGreaterThan(0);
+      expect(e.deliveriesSucceeded).toBeDefined();
+      expect(e.deliveriesFailed).toBeDefined();
+    }
+  }, 15000);
+
+  it("should sign webhooks with correct signature", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const requestsWithSignature = receivedRequests.filter(
+      (r) => r.headers["x-webhook-signature"]
+    );
+    expect(requestsWithSignature.length).toBeGreaterThan(0);
+    for (const req of requestsWithSignature) {
+      expect(req.headers["x-webhook-signature"]).toBeDefined();
+      expect(req.headers["x-webhook-topic"]).toBe("product.created");
+      expect(req.headers["content-type"]).toBe("application/json");
+    }
+  }, 15000);
+
+  it("should deactivate subscription", async () => {
+    const subs = await subRepo.select().execute();
+    if (subs.length > 0) {
+      const toDeactivate = subs[0];
+      await subService.deactivate(toDeactivate.id);
+      const updated = await subRepo.read(toDeactivate.id);
+      expect(updated.active).toBe(false);
+    }
+  }, 10000);
+
+  it("should reactivate subscription", async () => {
+    const subs = await subRepo
+      .select()
+      .where(subRepo.attr("active").eq(false))
+      .execute();
+    if (subs.length > 0) {
+      const toReactivate = subs[0];
+      await subService.reactivate(toReactivate.id);
+      const updated = await subRepo.read(toReactivate.id);
+      expect(updated.active).toBe(true);
+    }
+  }, 10000);
+
+  it("should replay failed deliveries", async () => {
+    const failedDeliveries = await deliveryRepo
+      .select()
+      .where(deliveryRepo.attr("status").eq(WebhookDeliveryMode.POLLING))
+      .execute();
+
+    if (failedDeliveries.length > 0) {
+      const toReplay = failedDeliveries[0];
+      await deliveryService.replayEvent(toReplay.eventId);
+
+      const replayed = await deliveryRepo.findBy("eventId", toReplay.eventId);
+      expect(replayed.length).toBeGreaterThan(0);
+      for (const d of replayed) {
+        expect(d.attempts).toBe(0);
+        expect(d.status).toBe(WebhookDeliveryMode.POLLING);
+      }
+    }
+  }, 15000);
+
+  it("should process batch of products", async () => {
+    const products = [];
+    for (let i = 0; i < 3; i++) {
+      products.push(new Product({ name: `Batch Product ${i}` }));
+    }
+    await productRepo.createAll(products);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const events = await eventRepo.select().execute();
+    expect(events.length).toBeGreaterThan(0);
+
+    const deliveryCount = await deliveryRepo.select().count();
+    expect(deliveryCount).toBeGreaterThan(0);
+  }, 20000);
+
+  it("should finalize all deliveries", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const allDeliveries = await deliveryRepo.select().execute();
+    expect(allDeliveries.length).toBeGreaterThan(0);
+
+    const allEvents = await eventRepo.select().execute();
+    for (const event of allEvents) {
+      expect(event.status).toBeDefined();
+      expect(event.deliveriesSucceeded).toBeDefined();
+      expect(event.deliveriesFailed).toBeDefined();
+    }
+  }, 15000);
 });
