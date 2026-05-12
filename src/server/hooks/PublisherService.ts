@@ -39,7 +39,7 @@ export class WebhookPublisherService extends Service {
     evt: PublishDto<TPayload> | PublishDto<TPayload>[],
     ...args: MaybeContextualArg<any>
   ): Promise<void> {
-    const { log, ctx, ctxArgs } = (
+    const { log, ctx } = (
       await this.logCtx(args, "publish", true)
     ).for(this.publish);
     const entries = Array.isArray(evt) ? evt : [evt];

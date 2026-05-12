@@ -5,6 +5,7 @@ import {
   OrderDirection,
   pk,
   table,
+  uuid,
   updatedAt,
 } from "@decaf-ts/core";
 import { description } from "@decaf-ts/decoration";
@@ -19,6 +20,7 @@ import {
 @model()
 export class WebhookSubscription extends Model {
   @pk()
+  @uuid()
   @description("the subscription id")
   id!: string;
 

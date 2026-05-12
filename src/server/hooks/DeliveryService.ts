@@ -20,51 +20,16 @@ import { type Constructor, Metadata } from "@decaf-ts/decoration";
 import { Model } from "@decaf-ts/decorator-validation";
 import { WebhookDelivery } from "./models/WebhookDelivery";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
-import { computeNextAttempt, matchesTopic, signWebhookPayload } from "./utils";
-import {
-  BulkCrudOperationKeys,
-  InternalError,
-  OperationKeys,
-} from "@decaf-ts/db-decorators";
+import { computeNextAttempt, signWebhookPayload } from "./utils";
+import { InternalError } from "@decaf-ts/db-decorators";
 import { Lock } from "@decaf-ts/transactional-decorators";
-import {
-  eventToTopic,
-  getWebhookFilter,
-  KnownTopicOperations,
-  WebhookObserver,
-} from "./observers";
+import { getWebhookFilter, WebhookObserver } from "./observers";
 import { DeliveryServiceConfig } from "./types";
 import { WebhookPublisherService } from "./PublisherService";
 import { HttpAdapter } from "../../adapter";
 import { HttpResponse } from "../../types";
 
-function getDeliveryFilter(config: DeliveryServiceConfig<any>): ObserverFilter {
-  return function (
-    model: Constructor | string,
-    action: OperationKeys | BulkCrudOperationKeys | string,
-    ids: EventIds,
-    ...args: ContextualArgs<any>
-  ) {
-    const ctx = args.pop();
-    if (!ctx.getOrUndefined("observeFullResult"))
-      throw new InternalError(
-        `"observeFullResult" config is necessary to enable webhooks`
-      );
 
-    const payload = args.shift();
-
-    if (!payload)
-      throw new InternalError(`no payload received in observable event`);
-
-    const allowedTopics = config.topics;
-
-    if (KnownTopicOperations.includes(action as any)) {
-      action = action + "d";
-    }
-    const topic = eventToTopic(model, action);
-    return !!allowedTopics.filter((t) => matchesTopic(topic, t)).length;
-  };
-}
 
 @service()
 export class WebhookDeliveryService<

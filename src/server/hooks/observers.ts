@@ -1,7 +1,6 @@
 import {
   ContextualArgs,
   EventIds,
-  Observable,
   ObserverFilter,
   PersistenceObserver,
   service,

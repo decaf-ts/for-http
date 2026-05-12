@@ -20,6 +20,7 @@ import { RequestContext } from "./RequestContex";
 
 export abstract class DecafController<
   REQUEST,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   RESPONSE,
   CONTEXT extends RequestContext<REQUEST>,
 > extends Service<CONTEXT> {

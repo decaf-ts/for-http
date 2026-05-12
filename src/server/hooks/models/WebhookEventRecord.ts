@@ -5,6 +5,7 @@ import {
   OrderDirection,
   pk,
   table,
+  uuid,
   updatedAt,
 } from "@decaf-ts/core";
 import { description, prop } from "@decaf-ts/decoration";
@@ -22,6 +23,7 @@ import { WebhookStatus } from "../constants";
 @model()
 export class WebhookEventRecord extends Model {
   @pk()
+  @uuid()
   @description("the subscription id")
   id!: string;
 

@@ -19,9 +19,7 @@ export interface WebhookEnvelope<TPayload = unknown> {
   payload: TPayload;
 }
 
-export type DeliveryServiceConfig<
-  A extends HttpAdapter<any, any, any, any, any>,
-> = {
+export type DeliveryServiceConfig<A extends HttpAdapter<any, any, any, any>> = {
   adapter: Constructor<A>;
   config: ConfigOf<A>;
   autoStart: boolean;
@@ -33,3 +31,29 @@ export type DeliveryServiceConfig<
   flavours: string[];
   observer: Constructor<WebhookObserver>;
 };
+
+export interface WebhookSignatureMiddlewareConfig {
+  logging?: {
+    enabled?: boolean;
+    level?: "debug" | "info" | "error";
+    includePayloadHash?: boolean;
+  };
+  headerNames: {
+    signature: string;
+    webhookId: string;
+    topic: string;
+  };
+  fallbackToPublicKey?: boolean;
+}
+
+export interface SignatureMiddlewareError {
+  code:
+    | "WEBHOOK_SIGNATURE_MISSING"
+    | "WEBHOOK_SIGNATURE_INVALID"
+    | "WEBHOOK_SUBSCRIPTION_NOT_FOUND";
+  message: string;
+  timestamp: string;
+  requestId?: string;
+}
+
+

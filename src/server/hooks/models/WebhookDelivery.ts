@@ -19,7 +19,7 @@ import {
 } from "@decaf-ts/decorator-validation";
 import { WebhookStatus } from "../constants";
 
-@table("webhook_events")
+@table("webhook_deliveries")
 @model()
 export class WebhookDelivery extends Model {
   @pk()

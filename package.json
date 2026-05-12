@@ -105,6 +105,7 @@
   },
   "homepage": "https://github.com/decaf-ts/for-http#readme",
   "devDependencies": {
+    "@decaf-ts/for-nano": "latest",
     "@decaf-ts/utils": "latest",
     "@types/jest": "^30.0.0",
     "fastify": "^5.6.1"
