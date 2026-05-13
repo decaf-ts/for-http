@@ -80,6 +80,7 @@ export class WebhookEventRecord extends Model {
   @column()
   @required()
   @date()
+  @index([OrderDirection.ASC, OrderDirection.DSC])
   @description("date of next delivery attempt")
   nextAttemptAt!: Date;
 

@@ -494,9 +494,11 @@ export class WebhookDeliveryService<
     }
     const cfg: DeliveryServiceConfig<A> | undefined = args.shift();
     if (!cfg) throw new InternalError(`No config found`);
-    const models = this.models();
-    const flavours = [...new Set(models.map((m) => Metadata.flavourOf(m)))];
-    const topics = cfg.topics || models.map((m) => Model.hooks(m)).flat();
+    const configModels = cfg.models && cfg.models.length > 0 ? cfg.models : this.models();
+    const flavours = cfg.flavours && cfg.flavours.length > 0 
+      ? cfg.flavours 
+      : [...new Set(configModels.map((m) => Metadata.flavourOf(m)))];
+    const topics = cfg.topics || configModels.map((m) => Model.hooks(m)).flat();
     let client: A, clientConf: ConfigOf<A>;
     if (cfg.adapter instanceof Adapter) {
       client = cfg.adapter as A;
@@ -521,7 +523,7 @@ export class WebhookDeliveryService<
         pollIntervalMs: cfg.pollIntervalMs || 5000,
         autoStart: cfg.autoStart,
         topics: topics,
-        models: models,
+        models: configModels,
         flavours: flavours,
         observer: cfg.observer || WebhookObserver,
       },

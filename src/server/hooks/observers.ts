@@ -29,7 +29,8 @@ export function eventToTopic<F extends boolean = false>(
   if (KnownTopicOperations.includes(action as any)) {
     action = action + "d";
   }
-  const topic = (typeof model === "string" ? model : model.name).toLowerCase();
+  const modelVal = typeof model === "string" ? model : model.name;
+  const topic = modelVal.toLowerCase();
   action = action.toLowerCase();
   return (
     !fullResult
@@ -66,6 +67,7 @@ export function getWebhookFilter(
       action = action + "d";
     }
     const topic = eventToTopic(model, action);
+    if (!allowedTopics || allowedTopics.length === 0) return true;
     return !!allowedTopics.filter((t) => matchesTopic(topic, t)).length;
   };
 }

@@ -435,7 +435,7 @@ describe("Webhook Engine Full Integration Test", () => {
     const events = await eventRepo.select().execute();
     expect(events.length).toBeGreaterThan(0);
 
-    const deliveryCount = await deliveryRepo.select().count();
+    const deliveryCount = await deliveryRepo.count().execute();
     expect(deliveryCount).toBeGreaterThan(0);
   }, 20000);
 

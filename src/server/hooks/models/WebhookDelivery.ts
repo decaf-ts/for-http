@@ -68,16 +68,16 @@ export class WebhookDelivery extends Model {
   @column()
   @required()
   @date()
-  @index([OrderDirection.ASC, OrderDirection.DSC])
+  @index([OrderDirection.ASC])
+  @index([OrderDirection.ASC], ["createdAt"])
   @description("date of next delivery attempt")
   nextAttemptAt!: Date;
 
   @column()
-  @required()
   @date()
   @index([OrderDirection.ASC, OrderDirection.DSC])
   @description("date of last delivery attempt")
-  lastAttemptAt!: Date;
+  lastAttemptAt?: Date;
 
   @column()
   @prop()
@@ -97,6 +97,7 @@ export class WebhookDelivery extends Model {
   @column()
   @required()
   @option(WebhookStatus)
+  @index([OrderDirection.ASC, OrderDirection.DSC])
   @description("Status of delivery")
   status!: WebhookStatus;
 
