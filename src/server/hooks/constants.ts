@@ -13,3 +13,5 @@ export enum WebhookDeliveryMode {
 export const WEBHOOK_ADAPTERS_FLAVOURS = Symbol("WEBHOOK_ADAPTERS_FLAVOURS");
 
 export const HookKey = "hook";
+
+export const DefaultHookTopics = ["created", "updated", "deleted", "*"];

@@ -4,12 +4,13 @@ import { HookKey } from "../hooks/constants";
 import { HookMetadata } from "../hooks/decorators";
 
 (Model as any).hooks = function hooks<M extends Model>(
-  m: M | Constructor<M>
+  m: M | Constructor<M>,
+  allowWildCard = false
 ): string[] {
-  const meta: HookMetadata = Metadata.get(
-    typeof m === "function" ? m : (m.constructor as any),
-    HookKey
-  );
+  const constr = typeof m === "function" ? m : (m.constructor as any);
+  const meta: HookMetadata = Metadata.get(constr, HookKey);
   if (!meta) return [];
-  return meta.topics;
+  return allowWildCard
+    ? [...meta.topics, constr.name.toLowerCase() + ".*"]
+    : meta.topics;
 };

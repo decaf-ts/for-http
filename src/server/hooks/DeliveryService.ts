@@ -19,11 +19,10 @@ import {
 import { HookKey, WebhookDeliveryMode, WebhookStatus } from "./constants";
 import { type Constructor, Metadata, uses } from "@decaf-ts/decoration";
 import { Model } from "@decaf-ts/decorator-validation";
-import { OperationKeys } from "@decaf-ts/db-decorators";
+import { InternalError, OperationKeys } from "@decaf-ts/db-decorators";
 import { WebhookDelivery } from "./models/WebhookDelivery";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
 import { computeNextAttempt, signWebhookPayload } from "./utils";
-import { InternalError } from "@decaf-ts/db-decorators";
 import { Lock } from "@decaf-ts/transactional-decorators";
 import { getWebhookFilter, WebhookObserver } from "./observers";
 import { DeliveryServiceConfig } from "./types";
@@ -133,7 +132,7 @@ export class WebhookDeliveryService<
       this.controller.abort();
     }
     this.syncing = false;
-    await this.startObserving(ctx);
+    await this.stopObserving(ctx);
 
     while (await this.isRunning()) {
       log.verbose(`Waiting for current deliveries to finish`);
@@ -282,7 +281,7 @@ export class WebhookDeliveryService<
           .and(this.deliveries.attr("nextAttemptAt").lte(new Date()))
       )
       .orderBy("nextAttemptAt", OrderDirection.ASC)
-      .thenBy("createdAt", OrderDirection.ASC)
+      // .thenBy("createdAt", OrderDirection.ASC)
       .limit(batchSize)
       .execute(ctx);
 
@@ -488,17 +487,21 @@ export class WebhookDeliveryService<
   async initialize(
     ...args: MaybeContextualArg<any>
   ): Promise<{ config: DeliveryServiceConfig<A>; client: A }> {
-    const ctx = args.pop();
-    if (!(ctx instanceof Context)) {
-      args.push(ctx);
+    const context = args.pop();
+    if (!(context instanceof Context)) {
+      args.push(context);
     }
     const cfg: DeliveryServiceConfig<A> | undefined = args.shift();
     if (!cfg) throw new InternalError(`No config found`);
-    const configModels = cfg.models && cfg.models.length > 0 ? cfg.models : this.models();
-    const flavours = cfg.flavours && cfg.flavours.length > 0 
-      ? cfg.flavours 
-      : [...new Set(configModels.map((m) => Metadata.flavourOf(m)))];
-    const topics = cfg.topics || configModels.map((m) => Model.hooks(m)).flat();
+    const models = cfg.models && cfg.models.length ? cfg.models : this.models();
+    const flavours =
+      cfg.flavours && cfg.flavours.length > 0
+        ? cfg.flavours
+        : [...new Set(models.map((m) => Metadata.flavourOf(m)))];
+    const topics =
+      cfg.topics && cfg.topics.length
+        ? cfg.topics
+        : models.map((m) => Model.hooks(m, !!cfg.allowWildcard)).flat();
     let client: A, clientConf: ConfigOf<A>;
     if (cfg.adapter instanceof Adapter) {
       client = cfg.adapter as A;
@@ -513,20 +516,49 @@ export class WebhookDeliveryService<
       uses(HookKey)(WebhookSubscription);
       clientConf = cfg.config as ConfigOf<A>;
     }
+
+    this._client = client;
+    this._config = {
+      adapter: client.constructor as Constructor<A>,
+      config: clientConf,
+      mode: cfg.mode || WebhookDeliveryMode.POLLING,
+      batchSize: cfg.batchSize || 50,
+      pollIntervalMs: cfg.pollIntervalMs || 5000,
+      autoStart: cfg.autoStart,
+      topics: topics,
+      models: models,
+      flavours: flavours,
+      observer: cfg.observer || WebhookObserver,
+    };
+    const { log, ctx } = (
+      await this.logCtx(args, PersistenceKeys.INITIALIZATION, true)
+    ).for(this.initialize);
+
+    await client.initialize(ctx);
+
+    if (cfg.callback) {
+      log.info(`Calling configured callback`);
+      try {
+        cfg.callback(this.client, ctx);
+      } catch (e: unknown) {
+        throw new InternalError(
+          `Failed to run configured callback before starting: ${e}`
+        );
+      }
+    }
+
+    if (this._config.autoStart)
+      try {
+        log.info(`Auto-starting Webhook delivery service`);
+        await this.start(ctx);
+      } catch (e: unknown) {
+        throw new InternalError(
+          `Failed to start Webhook delivery service: ${e}`
+        );
+      }
     return {
       client: client,
-      config: {
-        adapter: client.constructor as Constructor<A>,
-        config: clientConf,
-        mode: cfg.mode || WebhookDeliveryMode.POLLING,
-        batchSize: cfg.batchSize || 50,
-        pollIntervalMs: cfg.pollIntervalMs || 5000,
-        autoStart: cfg.autoStart,
-        topics: topics,
-        models: configModels,
-        flavours: flavours,
-        observer: cfg.observer || WebhookObserver,
-      },
+      config: this._config,
     };
   }
 

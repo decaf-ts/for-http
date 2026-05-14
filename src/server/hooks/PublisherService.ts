@@ -39,9 +39,9 @@ export class WebhookPublisherService extends Service {
     evt: PublishDto<TPayload> | PublishDto<TPayload>[],
     ...args: MaybeContextualArg<any>
   ): Promise<void> {
-    const { log, ctx } = (
-      await this.logCtx(args, "publish", true)
-    ).for(this.publish);
+    const { log, ctx } = (await this.logCtx(args, "publish", true)).for(
+      this.publish
+    );
     const entries = Array.isArray(evt) ? evt : [evt];
     if (!entries.length) {
       return;
@@ -56,7 +56,8 @@ export class WebhookPublisherService extends Service {
 
     const rows = await Promise.all(
       entries.map(async (entry) => {
-        const topic: WebhookTopic = `${entry.entity}.${entry.action}`;
+        const topic =
+          `${entry.entity}.${entry.action}`.toLowerCase() as WebhookTopic;
         const matching = activeSubscriptions.filter((s: WebhookSubscription) =>
           matchesTopic(topic, s.topic)
         );

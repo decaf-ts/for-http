@@ -35,6 +35,8 @@ export type DeliveryServiceConfig<A extends Adapter<any, any, any, any>> = {
   models: Constructor<Model<boolean>>[];
   flavours: string[];
   observer?: Constructor<WebhookObserver>;
+  callback?: (adapter: A, ...args: any) => void;
+  allowWildcard?: boolean;
 };
 
 export interface WebhookSignatureMiddlewareConfig {
