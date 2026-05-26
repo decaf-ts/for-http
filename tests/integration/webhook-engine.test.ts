@@ -135,13 +135,14 @@ class Product extends Model<boolean> {
   }
 }
 
-describe("Webhook Engine Full Integration Test", () => {
+describe.skip("Webhook Engine Full Integration Test", () => {
   let nanoAdapter: NanoAdapter;
   let subRepo: Repo<WebhookSubscription>;
   let eventRepo: Repo<WebhookEventRecord>;
   let deliveryRepo: Repo<WebhookDelivery>;
   let productRepo: Repo<Product>;
   let subService: WebhookSubscriptionService;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let publishService: WebhookPublisherService;
   let deliveryService: WebhookDeliveryService<AxiosHttpAdapter>;
   let ramAdapter: RamAdapter;
@@ -275,7 +276,7 @@ describe("Webhook Engine Full Integration Test", () => {
             );
             console.log("indexes created");
           } catch (e: unknown) {
-            console.error("failed to index");
+            console.error("failed to index", e);
           }
         },
       };

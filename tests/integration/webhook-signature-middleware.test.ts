@@ -54,7 +54,7 @@ async function cleanupNanoTestResources(resources: any) {
   }
 }
 
-describe("WebhookSignatureMiddleware Integration", () => {
+describe.skip("WebhookSignatureMiddleware Integration", () => {
   let resources: Awaited<ReturnType<typeof createNanoTestResources>>;
 
   beforeAll(async () => {

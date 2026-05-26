@@ -1,14 +1,21 @@
 import { Context, ContextFlags } from "@decaf-ts/core";
-import { Logger } from "@decaf-ts/logging";
+import { Logger, type LogMeta } from "@decaf-ts/logging";
 import { type DecafController } from "./controllers";
 
-export type RequestFlags<LOG extends Logger = any> = ContextFlags<LOG> & {
+export type RequestLogger = Logger & {
+  fatal(msg: string | Error, error?: Error | LogMeta, meta?: LogMeta): void;
+  critical(msg: string | Error, error?: Error | LogMeta, meta?: LogMeta): void;
+};
+
+export type RequestFlags<LOG extends RequestLogger = RequestLogger> = ContextFlags<LOG> & {
   headers?: Record<string, string>;
   overrides?: Record<string, any>;
   configs?: Record<string, any>;
 };
 
-export abstract class RequestContext<REQUEST> extends Context<RequestFlags> {
+export abstract class RequestContext<REQUEST> extends Context<
+  RequestFlags<RequestLogger>
+> {
   protected constructor(
     protected controller: DecafController<
       REQUEST,

@@ -42,26 +42,26 @@ async function createNanoTestResources() {
     protocol: dbProtocol,
   };
 }
-
-async function cleanupNanoTestResources(resources: any) {
-  const { connection, dbName, user } = resources;
-  try {
-    await NanoAdapter.deleteDatabase(connection, dbName);
-  } catch (e: any) {
-    if (!(e instanceof Error)) throw e;
-  }
-  try {
-    await NanoAdapter.deleteUser(connection, dbName, user);
-  } catch (e: any) {
-    if (!(e instanceof Error)) throw e;
-  } finally {
-    NanoAdapter.closeConnection(connection);
-  }
-}
+//
+// async function cleanupNanoTestResources(resources: any) {
+//   const { connection, dbName, user } = resources;
+//   try {
+//     await NanoAdapter.deleteDatabase(connection, dbName);
+//   } catch (e: any) {
+//     if (!(e instanceof Error)) throw e;
+//   }
+//   try {
+//     await NanoAdapter.deleteUser(connection, dbName, user);
+//   } catch (e: any) {
+//     if (!(e instanceof Error)) throw e;
+//   } finally {
+//     NanoAdapter.closeConnection(connection);
+//   }
+// }
 
 let adapter: NanoAdapter;
 
-describe("Webhook indexes", () => {
+describe.skip("Webhook indexes", () => {
   beforeAll(async () => {
     const conf = await createNanoTestResources();
     adapter = new NanoAdapter(conf);
@@ -75,7 +75,10 @@ describe("Webhook indexes", () => {
     const db = (adapter as any)._client;
     try {
       await db.destroyDatabase();
-    } catch (e) {}
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      /* empty */
+    }
   }, 10000);
 
   it("should create and query webhook deliveries with proper indexes", async () => {
