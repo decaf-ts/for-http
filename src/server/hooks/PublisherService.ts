@@ -32,7 +32,7 @@ export class WebhookPublisherService extends Service {
   events!: Repo<WebhookEventRecord>;
 
   constructor() {
-    super("hook-publisher");
+    super();
   }
 
   async publish<TPayload>(

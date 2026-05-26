@@ -24,11 +24,8 @@ export abstract class DecafController<
   RESPONSE,
   CONTEXT extends RequestContext<REQUEST>,
 > extends Service<CONTEXT> {
-  protected constructor(
-    protected readonly ctx: RequestContext<REQUEST>,
-    name: string
-  ) {
-    super(name);
+  protected constructor(protected readonly ctx: RequestContext<REQUEST>) {
+    super();
   }
 
   protected headersOf(request: REQUEST): Record<string, any> | undefined {
@@ -175,8 +172,8 @@ export abstract class DecafModelController<
     return this._persistence.override(ctx.toOverrides());
   }
 
-  protected constructor(name: string) {
-    super(undefined as any, name);
+  protected constructor() {
+    super(undefined as any);
   }
 
   protected override logCtx<

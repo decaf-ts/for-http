@@ -4,7 +4,6 @@ import {
   ClientBasedService,
   ConfigOf,
   Context,
-  ContextOf,
   ContextualArgs,
   EventIds,
   type MaybeContextualArg,
@@ -29,11 +28,12 @@ import { DeliveryServiceConfig } from "./types";
 import { WebhookPublisherService } from "./PublisherService";
 import { HttpAdapter } from "../../adapter";
 import { WebhookSubscription } from "./models/index";
+import { HttpFlags } from "../../types";
 
 @service()
 export class WebhookDeliveryService<
   A extends HttpAdapter<any, any, any, any, any>,
-> extends ClientBasedService<A, DeliveryServiceConfig<A>, ContextOf<A>> {
+> extends ClientBasedService<A, DeliveryServiceConfig<A>, Context<HttpFlags>> {
   @repository(WebhookDelivery)
   deliveries!: Repo<WebhookDelivery>;
 
@@ -325,7 +325,7 @@ export class WebhookDeliveryService<
         rawResponse
       );
 
-      log.debug("rawResponse", rawResponse);
+      // log.debug("rawResponse", { rawResponse });
       delivery.attempts += 1;
       delivery.lastAttemptAt = now;
       delivery.responseStatus = rawResponse.code;
@@ -503,18 +503,18 @@ export class WebhookDeliveryService<
         ? cfg.topics
         : models.map((m) => Model.hooks(m, !!cfg.allowWildcard)).flat();
     let client: A, clientConf: ConfigOf<A>;
-    if (cfg.adapter instanceof Adapter) {
-      client = cfg.adapter as A;
-      uses(client.alias)(WebhookDelivery);
-      uses(client.alias)(WebhookEventRecord);
-      uses(client.alias)(WebhookSubscription);
-      clientConf = cfg.config || client.config;
-    } else {
+    if (typeof cfg.adapter === "function") {
       client = new cfg.adapter(cfg.config, HookKey);
       uses(HookKey)(WebhookDelivery);
       uses(HookKey)(WebhookEventRecord);
       uses(HookKey)(WebhookSubscription);
       clientConf = cfg.config as ConfigOf<A>;
+    } else {
+      client = cfg.adapter as A;
+      uses(client.alias)(WebhookDelivery);
+      uses(client.alias)(WebhookEventRecord);
+      uses(client.alias)(WebhookSubscription);
+      clientConf = cfg.config || client.config;
     }
 
     this._client = client;
@@ -562,7 +562,9 @@ export class WebhookDeliveryService<
     };
   }
 
-  override async shutdown(...args: MaybeContextualArg<any>): Promise<void> {
+  override async shutdown(
+    ...args: MaybeContextualArg<Context<HttpFlags>>
+  ): Promise<void> {
     const { ctxArgs } = (
       await this.logCtx(args, PersistenceKeys.SHUTDOWN, true)
     ).for(this.shutdown);
@@ -575,9 +577,9 @@ export class WebhookDeliveryService<
     table: Constructor<any> | string,
     event: AllOperationKeys,
     ids: EventIds,
-    ...args: ContextualArgs<any>
+    ...args: ContextualArgs<Context<HttpFlags>>
   ): Promise<void> {
-    const { log, ctx, ctxArgs } = this.logCtx(args, this.refresh);
+    const { log, ctx, ctxArgs } = this.logCtx(args, this.refresh, false);
     await super.refresh(table, event, ids, ...ctxArgs); // still triggers for normal observers
 
     if (!ctx.getOrUndefined("observeFullResult"))

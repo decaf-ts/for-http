@@ -1,4 +1,5 @@
 import {
+  Context,
   ContextualArgs,
   EventIds,
   ObserverFilter,
@@ -14,6 +15,7 @@ import { Constructor } from "@decaf-ts/decoration";
 import { matchesTopic } from "./utils";
 import { DeliveryServiceConfig } from "./types";
 import { WebhookPublisherService } from "./PublisherService";
+import { HttpFlags } from "../../types";
 
 export const KnownTopicOperations = [
   OperationKeys.CREATE,
@@ -48,7 +50,7 @@ export function getWebhookFilter(
     model: Constructor | string,
     action: OperationKeys | BulkCrudOperationKeys | string,
     ids: EventIds,
-    ...args: ContextualArgs<any>
+    ...args: ContextualArgs<Context<HttpFlags>>
   ) {
     const ctx = args.pop();
     if (!ctx.getOrUndefined("observeFullResult"))
@@ -72,7 +74,7 @@ export function getWebhookFilter(
   };
 }
 
-export class WebhookObserver implements PersistenceObserver<any> {
+export class WebhookObserver implements PersistenceObserver<Context<HttpFlags>> {
   @service()
   publications!: WebhookPublisherService;
 
@@ -83,7 +85,7 @@ export class WebhookObserver implements PersistenceObserver<any> {
     operation: OperationKeys | BulkCrudOperationKeys | string,
     ids: EventIds,
     payload: any | any[],
-    ...args: ContextualArgs<any>
+    ...args: ContextualArgs<Context<HttpFlags>>
   ) {
     const ctx = args.pop();
     const log = ctx.logger.for(this.refresh);
