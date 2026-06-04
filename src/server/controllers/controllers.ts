@@ -15,7 +15,6 @@ import {
 import { Logger } from "@decaf-ts/logging";
 import { Model, ModelConstructor } from "@decaf-ts/decorator-validation";
 import { Contextual } from "@decaf-ts/db-decorators";
-import { Constructor } from "@decaf-ts/decoration";
 import { RequestContext } from "./RequestContex";
 
 export abstract class DecafController<
