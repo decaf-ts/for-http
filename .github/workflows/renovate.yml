@@ -16,5 +16,5 @@ jobs:
         with:
           configurationFile: renovate.json
         env:
-          RENOVATE_TOKEN: ${{ secrets.JIRA_AUTOMATION }}
-          RENOVATE_REPOSITORIES: decaf-ts/utils
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          RENOVATE_REPOSITORIES: ${{ github.repository}}
