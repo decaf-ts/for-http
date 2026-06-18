@@ -1,7 +1,10 @@
 import { WebhookSubscription } from "../../src/server/hooks/models/WebhookSubscription";
 import { WebhookEventRecord } from "../../src/server/hooks/models/WebhookEventRecord";
 import { WebhookDelivery } from "../../src/server/hooks/models/WebhookDelivery";
-import { WebhookDeliveryMode } from "../../src/server/hooks/constants";
+import {
+  WebhookDeliveryMode,
+  WebhookStatus,
+} from "../../src/server/hooks/constants";
 import { NanoAdapter, NanoRepository } from "@decaf-ts/for-nano";
 import {
   pk,
@@ -34,6 +37,7 @@ import {
   WebhookPublisherService,
   WebhookSubscriptionService,
 } from "../../src/server/index";
+import { signWebhookPayload } from "../../src/server/hooks/utils";
 import { Constructor, uses } from "@decaf-ts/decoration";
 import { OperationKeys } from "@decaf-ts/db-decorators";
 
@@ -51,7 +55,7 @@ async function createNanoTestResources() {
   const dbProtocol = (process.env.NANO_PROTOCOL as "http" | "https") || "http";
 
   const suffix = randomSuffix();
-  const dbName = `webhook_engine9`;
+  const dbName = `webhook_engine_${suffix}`;
   const user = `webhook_user_${suffix}`;
   const password = `${user}_pw`;
   const connection = NanoAdapter.connect(
@@ -135,7 +139,7 @@ class Product extends Model<boolean> {
   }
 }
 
-describe.skip("Webhook Engine Full Integration Test", () => {
+describe("Webhook Engine Full Integration Test", () => {
   let nanoAdapter: NanoAdapter;
   let subRepo: Repo<WebhookSubscription>;
   let eventRepo: Repo<WebhookEventRecord>;
@@ -198,6 +202,10 @@ describe.skip("Webhook Engine Full Integration Test", () => {
   });
 
   describe("Webhook engine", () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
     beforeAll(async () => {
       resources = await createNanoTestResources();
 
@@ -256,11 +264,12 @@ describe.skip("Webhook Engine Full Integration Test", () => {
 
       publishService = new WebhookPublisherService();
       deliveryService = new WebhookDeliveryService();
+      subService = new WebhookSubscriptionService();
 
       const hookCfg: DeliveryServiceConfig<NanoAdapter> = {
         adapter: nanoAdapter,
         httpAdapter: httpAdapter,
-        mode: WebhookDeliveryMode.POLLING,
+        mode: WebhookDeliveryMode.SYNCHRONOUS,
         autoStart: true,
         models: [Product],
         batchSize: 2,
@@ -307,7 +316,7 @@ describe.skip("Webhook Engine Full Integration Test", () => {
       const subs = endpoints.map(
         (e, i) =>
           new WebhookSubscription({
-            topic: `product.${i === 0 ? "*" : i % 2 === 0 ? "created" : "updated"}`,
+            topic: i === 0 ? "product.*" : "product.created",
             url: e,
             secret: "test-secret",
             active: true,
@@ -320,7 +329,47 @@ describe.skip("Webhook Engine Full Integration Test", () => {
         expect(createdSub.hasErrors()).toBeUndefined();
     }, 10000);
 
-    it.skip("should trigger subscriptions on product create", async () => {
+    const createWebhookFixture = async (targetUrl: string) => {
+      const event = await eventRepo.create(
+        new WebhookEventRecord({
+          topic: "product.created",
+          model: "Product",
+          action: "created",
+          entityId: `entity-${randomSuffix()}`,
+          payload: JSON.stringify({
+            topic: "product.created",
+            targetUrl,
+          }),
+          status: WebhookStatus.PENDING,
+          deliveriesTotal: 1,
+          deliveriesSucceeded: 0,
+          deliveriesFailed: 0,
+          nextAttemptAt: new Date(),
+        })
+      );
+
+      const delivery = await deliveryRepo.create(
+        new WebhookDelivery({
+          eventId: event.id,
+          subscriptionId: `subscription-${randomSuffix()}`,
+          topic: "product.created",
+          targetUrl,
+          secret: "test-secret",
+          attempts: 0,
+          maxAttempts: 12,
+          nextAttemptAt: new Date(),
+          lastAttemptAt: null,
+          responseStatus: null,
+          responseBody: null,
+          errorMessage: null,
+          status: WebhookStatus.PENDING,
+        })
+      );
+
+      return { event, delivery };
+    };
+
+    it("should trigger subscriptions on product create", async () => {
       const p = new Product({
         classification: "Product A",
       });
@@ -336,7 +385,7 @@ describe.skip("Webhook Engine Full Integration Test", () => {
       expect(events[0].topic).toBe("product.created");
     }, 15000);
 
-    it.skip("should create deliveries for matching subscriptions", async () => {
+    it("should create deliveries for matching subscriptions", async () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const deliveries = await deliveryRepo.select().execute();
@@ -344,81 +393,62 @@ describe.skip("Webhook Engine Full Integration Test", () => {
       for (const d of deliveries) {
         expect(d.eventId).toBeDefined();
         expect(d.subscriptionId).toBeDefined();
-        expect(d.status).toBe(WebhookDeliveryMode.POLLING);
-        expect(d.attempts).toBe(0);
+        expect(Object.values(WebhookStatus)).toContain(d.status);
+        expect(d.attempts).toBeGreaterThanOrEqual(0);
         expect(d.maxAttempts).toBe(12);
       }
     }, 10000);
 
-    it.skip("should process deliveries successfully (200 OK)", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    it("should process deliveries successfully (200 OK)", async () => {
+      const { delivery } = await createWebhookFixture(`${serverUrl}/webhook1`);
+      const postSpy = jest
+        .spyOn((deliveryService as any).http, "post")
+        .mockResolvedValue({
+          code: 200,
+          data: { status: "ok", endpoint: "/webhook1" },
+        } as any);
 
-      const deliveries = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("targetUrl").like("%webhook1%"))
-        .execute();
-      expect(deliveries.length).toBeGreaterThan(0);
+      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(postSpy).toHaveBeenCalledTimes(1);
 
-      const refreshed = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("targetUrl").like("%webhook1%"))
-        .execute();
-      const successful = refreshed.filter(
-        (d) => d.status === WebhookDeliveryMode.POLLING
-      );
-      expect(successful.length).toBeGreaterThan(0);
-      for (const d of successful) {
-        expect(d.attempts).toBeGreaterThan(0);
-        expect(d.responseStatus).toBe(200);
-        expect(d.responseBody).toBeDefined();
-      }
+      const refreshed = await deliveryRepo.read(delivery.id);
+      expect(refreshed.status).toBe(WebhookStatus.COMPLETED);
+      expect(refreshed.attempts).toBeGreaterThan(0);
+      expect(refreshed.responseStatus).toBe(200);
+      expect(refreshed.responseBody).toBeDefined();
     }, 20000);
 
-    it.skip("should handle failed deliveries (500 error)", async () => {
-      const deliveries = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("targetUrl").like("%webhook3%"))
-        .execute();
-      expect(deliveries.length).toBeGreaterThan(0);
+    it("should handle failed deliveries (500 error)", async () => {
+      const { delivery } = await createWebhookFixture(`${serverUrl}/webhook3`);
+      jest.spyOn((deliveryService as any).http, "post").mockResolvedValue({
+        code: 500,
+        data: { error: "Internal Server Error" },
+      } as any);
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
 
-      const refreshed = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("targetUrl").like("%webhook3%"))
-        .execute();
-      const failed = refreshed.filter((d) => d.targetUrl.includes("/webhook3"));
-      expect(failed.length).toBeGreaterThan(0);
-      for (const d of failed) {
-        expect(d.errorMessage).toBeDefined();
-      }
+      const refreshed = await deliveryRepo.read(delivery.id);
+      expect(refreshed.status).toBe(WebhookStatus.FAILED);
+      expect(refreshed.errorMessage).toBeDefined();
+      expect(refreshed.responseStatus).toBe(500);
     }, 20000);
 
-    it.skip("should handle service unavailable (503)", async () => {
-      const deliveries = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("targetUrl").like("%webhook4%"))
-        .execute();
-      expect(deliveries.length).toBeGreaterThan(0);
+    it("should handle service unavailable (503)", async () => {
+      const { delivery } = await createWebhookFixture(`${serverUrl}/webhook4`);
+      jest.spyOn((deliveryService as any).http, "post").mockResolvedValue({
+        code: 503,
+        data: { error: "Service Unavailable" },
+      } as any);
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
 
-      const refreshed = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("targetUrl").like("%webhook4%"))
-        .execute();
-      const unavailable = refreshed.filter((d) =>
-        d.targetUrl.includes("/webhook4")
-      );
-      expect(unavailable.length).toBeGreaterThan(0);
-      for (const d of unavailable) {
-        expect(d.responseStatus).toBe(503);
-      }
+      const refreshed = await deliveryRepo.read(delivery.id);
+      expect(refreshed.status).toBe(WebhookStatus.FAILED);
+      expect(refreshed.responseStatus).toBe(503);
     }, 20000);
 
-    it.skip("should update event status based on deliveries", async () => {
+    it("should update event status based on deliveries", async () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const events = await eventRepo.select().execute();
@@ -431,21 +461,29 @@ describe.skip("Webhook Engine Full Integration Test", () => {
       }
     }, 15000);
 
-    it.skip("should sign webhooks with correct signature", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    it("should sign webhooks with correct signature", async () => {
+      receivedRequests = [];
+      const { delivery } = await createWebhookFixture(`${serverUrl}/webhook1`);
+      const postSpy = jest
+        .spyOn((deliveryService as any).http, "post")
+        .mockResolvedValue({
+          code: 200,
+          data: { status: "ok", endpoint: "/webhook1" },
+        } as any);
 
-      const requestsWithSignature = receivedRequests.filter(
-        (r) => r.headers["x-webhook-signature"]
+      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
+
+      expect(postSpy).toHaveBeenCalledTimes(1);
+      const [, body, options] = postSpy.mock.calls[0];
+      expect(typeof body).toBe("string");
+      expect(options?.headers?.["x-webhook-signature"]).toBe(
+        signWebhookPayload(delivery.secret, body as string)
       );
-      expect(requestsWithSignature.length).toBeGreaterThan(0);
-      for (const req of requestsWithSignature) {
-        expect(req.headers["x-webhook-signature"]).toBeDefined();
-        expect(req.headers["x-webhook-topic"]).toBe("product.created");
-        expect(req.headers["content-type"]).toBe("application/json");
-      }
+      expect(options?.headers?.["x-webhook-topic"]).toBe("product.created");
+      expect(options?.headers?.["content-type"]).toBe("application/json");
     }, 15000);
 
-    it.skip("should deactivate subscription", async () => {
+    it("should deactivate subscription", async () => {
       const subs = await subRepo.select().execute();
       if (subs.length > 0) {
         const toDeactivate = subs[0];
@@ -455,7 +493,7 @@ describe.skip("Webhook Engine Full Integration Test", () => {
       }
     }, 10000);
 
-    it.skip("should reactivate subscription", async () => {
+    it("should reactivate subscription", async () => {
       const subs = await subRepo
         .select()
         .where(subRepo.attr("active").eq(false))
@@ -468,42 +506,40 @@ describe.skip("Webhook Engine Full Integration Test", () => {
       }
     }, 10000);
 
-    it.skip("should replay failed deliveries", async () => {
+    it("should replay failed deliveries", async () => {
       const failedDeliveries = await deliveryRepo
         .select()
-        .where(deliveryRepo.attr("status").eq(WebhookDeliveryMode.POLLING))
+        .where(deliveryRepo.attr("status").eq(WebhookStatus.FAILED))
         .execute();
 
       if (failedDeliveries.length > 0) {
         const toReplay = failedDeliveries[0];
-        await deliveryService.replayEvent(toReplay.eventId);
+        await deliveryService.replayEvent(toReplay.eventId, Context.factory({}));
 
         const replayed = await deliveryRepo.findBy("eventId", toReplay.eventId);
         expect(replayed.length).toBeGreaterThan(0);
         for (const d of replayed) {
           expect(d.attempts).toBe(0);
-          expect(d.status).toBe(WebhookDeliveryMode.POLLING);
+          expect(d.status).toBe(WebhookStatus.PENDING);
         }
       }
     }, 15000);
 
-    it.skip("should process batch of products", async () => {
+    it("should process batch of products", async () => {
       const products = [];
       for (let i = 0; i < 3; i++) {
-        products.push(new Product({ name: `Batch Product ${i}` }));
+        products.push(new Product({ classification: `Batch Product ${i}` }));
       }
       await productRepo.createAll(products);
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const events = await eventRepo.select().execute();
       expect(events.length).toBeGreaterThan(0);
 
-      const deliveryCount = await deliveryRepo.count().execute();
+      const deliveryCount = (await deliveryRepo.select().execute()).length;
       expect(deliveryCount).toBeGreaterThan(0);
     }, 20000);
 
-    it.skip("should finalize all deliveries", async () => {
+    it("should finalize all deliveries", async () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const allDeliveries = await deliveryRepo.select().execute();

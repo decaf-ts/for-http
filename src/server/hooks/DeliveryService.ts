@@ -445,7 +445,10 @@ export class WebhookDeliveryService<
     event.nextAttemptAt = now;
     event.updatedAt = now;
 
-    await this.deliveries.updateAll(deliveries, ctx);
+    await this.deliveries.updateAll(
+      deliveries,
+      ctx.override({ applyUpdateValidation: false })
+    );
     await this.events.update(event, ctx);
   }
 
@@ -525,6 +528,8 @@ export class WebhookDeliveryService<
       batchSize: cfg.batchSize || 50,
       pollIntervalMs: cfg.pollIntervalMs || 5000,
       autoStart: cfg.autoStart,
+      httpAdapter: cfg.httpAdapter,
+      httpConfig: cfg.httpConfig,
       topics: topics,
       models: models,
       flavours: flavours,

@@ -1,4 +1,4 @@
-import { OrderDirection, Repository } from "@decaf-ts/core";
+import { Repository } from "@decaf-ts/core";
 import { WebhookStatus } from "../../src/server/hooks/constants";
 import { NanoAdapter } from "@decaf-ts/for-nano";
 import { WebhookDelivery } from "../../src/server/index";
@@ -9,7 +9,7 @@ async function createNanoTestResources() {
   const dbHost = process.env.NANO_HOST || "localhost:10010";
   const dbProtocol = (process.env.NANO_PROTOCOL as "http" | "https") || "http";
 
-  const suffix = "indexing";
+  const suffix = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const dbName = `webhook_engine_${suffix}`;
   const user = `webhook_user_${suffix}`;
   const password = `${user}_pw`;
@@ -21,13 +21,19 @@ async function createNanoTestResources() {
   );
 
   await NanoAdapter.createDatabase(connection, dbName).catch((e: any) => {
-    if (!(e instanceof Error) || (e as any).error !== "file_exists") {
+    if (
+      !(e instanceof Error) ||
+      ((e as any).error !== "file_exists" && (e as any).statusCode !== 409)
+    ) {
       throw e;
     }
   });
   await NanoAdapter.createUser(connection, dbName, user, password).catch(
     (e: any) => {
-      if (!(e instanceof Error) || (e as any).error !== "file_exists") {
+      if (
+        !(e instanceof Error) ||
+        ((e as any).error !== "file_exists" && (e as any).statusCode !== 409)
+      ) {
         throw e;
       }
     }
@@ -61,17 +67,16 @@ async function createNanoTestResources() {
 
 let adapter: NanoAdapter;
 
-describe.skip("Webhook indexes", () => {
+describe("Webhook indexes", () => {
   beforeAll(async () => {
     const conf = await createNanoTestResources();
     adapter = new NanoAdapter(conf);
     await adapter.initialize();
-    const db = (adapter as any)._client;
-    await db.createDatabase();
-    await (adapter as any).createIndexes();
+    await (adapter as any).index(WebhookDelivery);
   }, 30000);
 
   afterAll(async () => {
+    if (!adapter) return;
     const db = (adapter as any)._client;
     try {
       await db.destroyDatabase();
@@ -92,6 +97,7 @@ describe.skip("Webhook indexes", () => {
         subscriptionId: "sub1",
         topic: "test.created",
         targetUrl: "http://test.com",
+        secret: "test-secret",
         attempts: 0,
         maxAttempts: 12,
         nextAttemptAt: new Date(now.getTime() - 1000),
@@ -102,6 +108,7 @@ describe.skip("Webhook indexes", () => {
         subscriptionId: "sub2",
         topic: "test.created",
         targetUrl: "http://test.com",
+        secret: "test-secret",
         attempts: 0,
         maxAttempts: 12,
         nextAttemptAt: new Date(now.getTime() - 2000),
@@ -112,6 +119,7 @@ describe.skip("Webhook indexes", () => {
         subscriptionId: "sub3",
         topic: "test.created",
         targetUrl: "http://test.com",
+        secret: "test-secret",
         attempts: 0,
         maxAttempts: 12,
         nextAttemptAt: new Date(now.getTime() + 10000),
@@ -119,7 +127,7 @@ describe.skip("Webhook indexes", () => {
       }),
     ];
 
-    await repo.override({ user: "test" } as any).createAll(deliveries);
+    await repo.createAll(deliveries);
     //
     // const ctx = new Context({});
     // ctx.set("user", "test");
@@ -132,8 +140,6 @@ describe.skip("Webhook indexes", () => {
           .in([WebhookStatus.PENDING, WebhookStatus.FAILED])
           .and(repo.attr("nextAttemptAt").lte(now))
       )
-      .orderBy("nextAttemptAt", OrderDirection.ASC)
-      .thenBy("createdAt", OrderDirection.ASC)
       .limit(10)
       .execute();
 

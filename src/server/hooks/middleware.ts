@@ -64,9 +64,9 @@ export class WebhookSignatureMiddleware {
 
     const rawBody = this.getRequestBody(req);
     const signatureValid = verifyWebhookSignature(
+      subscription.secret,
       rawBody,
-      signature.value,
-      subscription.secret
+      signature.value
     );
 
     if (!signatureValid) {

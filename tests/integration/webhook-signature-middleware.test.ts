@@ -1,4 +1,7 @@
 import { WebhookSignatureMiddleware } from "../../src/server/hooks/middleware";
+import { WebhookSubscription } from "../../src/server/hooks/models/WebhookSubscription";
+import { signWebhookPayload } from "../../src/server/hooks/utils";
+import { WebhookSubscriptionService } from "../../src/server/hooks/SubscriptionService";
 import { ConflictError, NotFoundError } from "@decaf-ts/db-decorators";
 import { NanoAdapter } from "@decaf-ts/for-nano";
 
@@ -54,8 +57,12 @@ async function cleanupNanoTestResources(resources: any) {
   }
 }
 
-describe.skip("WebhookSignatureMiddleware Integration", () => {
+describe("WebhookSignatureMiddleware Integration", () => {
   let resources: Awaited<ReturnType<typeof createNanoTestResources>>;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
   beforeAll(async () => {
     resources = await createNanoTestResources("webhook_middleware");
@@ -66,19 +73,76 @@ describe.skip("WebhookSignatureMiddleware Integration", () => {
   });
 
   describe("Full Flow", () => {
-    it("should verify signature extraction", async () => {
+    it("should verify signature extraction and accept a valid webhook", async () => {
       const middleware = new WebhookSignatureMiddleware();
+      const secret = "integration-secret";
+      const rawBody = JSON.stringify({ ok: true, id: 1 });
+      const signature = signWebhookPayload(secret, rawBody);
+      jest
+        .spyOn(WebhookSubscriptionService.prototype, "list")
+        .mockResolvedValue([
+          new WebhookSubscription({
+            id: "sub-1",
+            topic: "payments.created",
+            url: "http://localhost/webhooks/payments",
+            secret,
+            active: true,
+          }),
+        ] as any);
 
       // Directly test signature extraction
-      const signature = middleware["extractSignature"](
+      const extracted = middleware["extractSignature"](
         "hmac-sha256=abc123def456"
       );
-      expect(signature).toBeDefined();
-      expect(signature?.algorithm).toBe("sha256");
-      expect(signature?.value).toBe("abc123def456");
+      expect(extracted).toBeDefined();
+      expect(extracted?.algorithm).toBe("sha256");
+      expect(extracted?.value).toBe("abc123def456");
 
-      // Note: Full verification would need real database, but the core logic is tested
-      expect(signature).not.toBeNull();
+      const req = {
+        url: "/webhooks/payments",
+        headers: {
+          "x-webhook-signature": `sha256=${signature}`,
+        },
+        rawBody: Buffer.from(rawBody),
+      };
+      const res: any = { status: 0, body: undefined };
+      const next = jest.fn();
+
+      await middleware.verify(req as any, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(0);
+    });
+
+    it("should reject an invalid webhook signature", async () => {
+      const middleware = new WebhookSignatureMiddleware();
+      jest
+        .spyOn(WebhookSubscriptionService.prototype, "list")
+        .mockResolvedValue([
+          new WebhookSubscription({
+            id: "sub-1",
+            topic: "payments.created",
+            url: "http://localhost/webhooks/payments",
+            secret: "integration-secret",
+            active: true,
+          }),
+        ] as any);
+
+      const req = {
+        url: "/webhooks/payments",
+        headers: {
+          "x-webhook-signature": "sha256=invalid",
+        },
+        rawBody: Buffer.from(JSON.stringify({ ok: true, id: 1 })),
+      };
+      const res: any = { status: 0, body: undefined };
+      const next = jest.fn();
+
+      await middleware.verify(req as any, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("WEBHOOK_SIGNATURE_INVALID");
     });
   });
 });
