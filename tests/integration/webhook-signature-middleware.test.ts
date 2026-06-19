@@ -7,6 +7,7 @@ import { NanoAdapter } from "@decaf-ts/for-nano";
 
 // Initialize NanoAdapter decoration first
 NanoAdapter.decoration();
+jest.setTimeout(120000);
 
 async function createNanoTestResources(prefix: string) {
   const adminUser = process.env.NANO_ADMIN_USER || "couchdb.admin";

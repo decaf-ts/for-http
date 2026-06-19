@@ -43,6 +43,7 @@ export class WebhookSubscription extends Model {
   // execution
   @column()
   @required()
+  @index([OrderDirection.ASC, OrderDirection.DSC], ["active", "createdAt", "id"])
   @description("control the status of the subscription")
   active!: boolean;
 

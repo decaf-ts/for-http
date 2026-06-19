@@ -175,7 +175,13 @@ export class AxiosHttpAdapter extends HttpAdapter<
     }
 
     const response = await this.client.request(
-      Object.assign({}, details, overrides)
+      Object.assign({}, details, overrides, {
+        headers: Object.assign(
+          {},
+          details.headers || {},
+          (overrides as AxiosRequestConfig).headers || {}
+        ),
+      })
     );
     return response as V;
   }

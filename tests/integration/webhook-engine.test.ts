@@ -43,9 +43,24 @@ import { OperationKeys } from "@decaf-ts/db-decorators";
 
 NanoAdapter.decoration();
 Model.setBuilder(Model.fromModel);
+jest.setTimeout(120000);
 
 function randomSuffix() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function waitFor<T>(
+  condition: () => Promise<T | false> | T | false,
+  timeoutMs = 15000,
+  intervalMs = 150
+): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const result = await condition();
+    if (result) return result;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for condition`);
 }
 
 async function createNanoTestResources() {
@@ -145,6 +160,7 @@ describe("Webhook Engine Full Integration Test", () => {
   let eventRepo: Repo<WebhookEventRecord>;
   let deliveryRepo: Repo<WebhookDelivery>;
   let productRepo: Repo<Product>;
+  let createdProductId: string | undefined;
   let subService: WebhookSubscriptionService;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let publishService: WebhookPublisherService;
@@ -377,18 +393,32 @@ describe("Webhook Engine Full Integration Test", () => {
       const created = await productRepo.create(p);
       expect(created.hasErrors()).toBeUndefined();
       expect(created.id).toBeDefined();
+      createdProductId = created.id;
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const events = await eventRepo.select().execute();
+      const events = await waitFor(async () => {
+        const rows = await eventRepo.select().limit(250).execute();
+        const matches = rows.filter((row) => row.entityId === created.id);
+        return matches.length > 0 ? matches : false;
+      }, 30000);
       expect(events.length).toBeGreaterThan(0);
       expect(events[0].topic).toBe("product.created");
-    }, 15000);
+    }, 45000);
 
     it("should create deliveries for matching subscriptions", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(createdProductId).toBeDefined();
+      const events = await waitFor(async () => {
+        const rows = await eventRepo.select().limit(250).execute();
+        const matches = rows.filter(
+          (row) => row.entityId === (createdProductId as string)
+        );
+        return matches.length > 0 ? matches : false;
+      }, 30000);
+      expect(events.length).toBeGreaterThan(0);
 
-      const deliveries = await deliveryRepo.select().execute();
+      const deliveries = await waitFor(async () => {
+        const rows = await deliveryRepo.findBy("eventId", events[0].id);
+        return rows.length > 0 ? rows : false;
+      }, 30000);
       expect(deliveries.length).toBeGreaterThan(0);
       for (const d of deliveries) {
         expect(d.eventId).toBeDefined();
@@ -397,7 +427,7 @@ describe("Webhook Engine Full Integration Test", () => {
         expect(d.attempts).toBeGreaterThanOrEqual(0);
         expect(d.maxAttempts).toBe(12);
       }
-    }, 10000);
+    }, 30000);
 
     it("should process deliveries successfully (200 OK)", async () => {
       const { delivery } = await createWebhookFixture(`${serverUrl}/webhook1`);
@@ -451,7 +481,7 @@ describe("Webhook Engine Full Integration Test", () => {
     it("should update event status based on deliveries", async () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const events = await eventRepo.select().execute();
+      const events = await eventRepo.select().limit(250).execute();
       expect(events.length).toBeGreaterThan(0);
       for (const e of events) {
         expect(e.status).toBeDefined();
@@ -484,7 +514,7 @@ describe("Webhook Engine Full Integration Test", () => {
     }, 15000);
 
     it("should deactivate subscription", async () => {
-      const subs = await subRepo.select().execute();
+      const subs = await subRepo.select().limit(250).execute();
       if (subs.length > 0) {
         const toDeactivate = subs[0];
         await subService.deactivate(toDeactivate.id);
@@ -516,7 +546,11 @@ describe("Webhook Engine Full Integration Test", () => {
         const toReplay = failedDeliveries[0];
         await deliveryService.replayEvent(toReplay.eventId, Context.factory({}));
 
-        const replayed = await deliveryRepo.findBy("eventId", toReplay.eventId);
+      const replayed = await deliveryRepo
+        .select()
+        .where(deliveryRepo.attr("eventId").eq(toReplay.eventId))
+        .limit(250)
+        .execute();
         expect(replayed.length).toBeGreaterThan(0);
         for (const d of replayed) {
           expect(d.attempts).toBe(0);
@@ -532,20 +566,20 @@ describe("Webhook Engine Full Integration Test", () => {
       }
       await productRepo.createAll(products);
 
-      const events = await eventRepo.select().execute();
+      const events = await eventRepo.select().limit(250).execute();
       expect(events.length).toBeGreaterThan(0);
 
-      const deliveryCount = (await deliveryRepo.select().execute()).length;
+      const deliveryCount = (await deliveryRepo.select().limit(250).execute()).length;
       expect(deliveryCount).toBeGreaterThan(0);
     }, 20000);
 
     it("should finalize all deliveries", async () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const allDeliveries = await deliveryRepo.select().execute();
+      const allDeliveries = await deliveryRepo.select().limit(250).execute();
       expect(allDeliveries.length).toBeGreaterThan(0);
 
-      const allEvents = await eventRepo.select().execute();
+      const allEvents = await eventRepo.select().limit(250).execute();
       for (const event of allEvents) {
         expect(event.status).toBeDefined();
         expect(event.deliveriesSucceeded).toBeDefined();

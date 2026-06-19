@@ -7,6 +7,7 @@ import {
 } from "@decaf-ts/core";
 import { WebhookSubscription } from "./models/WebhookSubscription";
 import { OperationKeys } from "@decaf-ts/db-decorators";
+import { collectPagedResults } from "./utils";
 
 @service(WebhookSubscription)
 export class WebhookSubscriptionService extends ModelService<WebhookSubscription> {
@@ -29,21 +30,33 @@ export class WebhookSubscriptionService extends ModelService<WebhookSubscription
     const { ctx } = (await this.logCtx([context], "list", true)).for(
       this.listAll
     );
-    return this.repo
-      .select()
-      .where(this.repo.attr("active").eq(true))
-      .orderBy("createdAt", OrderDirection.DSC)
-      .execute(ctx);
+    return collectPagedResults(
+      () =>
+        this.repo
+          .select()
+          .where(this.repo.attr("active").eq(true))
+          .orderBy("createdAt", OrderDirection.DSC)
+          .thenBy("id", OrderDirection.DSC)
+          .paginate(250, ctx),
+      250,
+      ctx
+    );
   }
 
   async listAll(context?: Context<any>): Promise<WebhookSubscription[]> {
     const { ctx } = (await this.logCtx([context], "list", true)).for(
       this.listAll
     );
-    return this.repo
-      .select()
-      .orderBy("createdAt", OrderDirection.DSC)
-      .execute(ctx);
+    return collectPagedResults(
+      () =>
+        this.repo
+          .select()
+          .orderBy("createdAt", OrderDirection.DSC)
+          .thenBy("id", OrderDirection.DSC)
+          .paginate(250, ctx),
+      250,
+      ctx
+    );
   }
 
   async deactivate(

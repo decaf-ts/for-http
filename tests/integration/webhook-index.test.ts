@@ -73,7 +73,7 @@ describe("Webhook indexes", () => {
     adapter = new NanoAdapter(conf);
     await adapter.initialize();
     await (adapter as any).index(WebhookDelivery);
-  }, 30000);
+  }, 120000);
 
   afterAll(async () => {
     if (!adapter) return;

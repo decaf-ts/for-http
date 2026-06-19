@@ -30,6 +30,7 @@ export class WebhookDelivery extends Model {
   @column()
   @required()
   @index([OrderDirection.ASC, OrderDirection.DSC])
+  @index([OrderDirection.ASC, OrderDirection.DSC], ["eventId", "createdAt", "id"])
   @description("the event id")
   eventId!: string;
 
@@ -42,6 +43,7 @@ export class WebhookDelivery extends Model {
   @column()
   @required()
   @index([OrderDirection.ASC, OrderDirection.DSC])
+  @index([OrderDirection.ASC, OrderDirection.DSC], ["topic", "createdAt", "id"])
   @description("subscription topic eg <model>.create, <model>.*, etc")
   topic!: string;
 

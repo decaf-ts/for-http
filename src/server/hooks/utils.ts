@@ -48,3 +48,26 @@ export function computeNextAttempt(attempts: number): Date {
 export function keyToTopic(key: OperationKeys): string {
   return key.toLowerCase() + "d";
 }
+
+type BookmarkPaginator<T> = {
+  page: (page?: number, bookmark?: any, ...args: any[]) => Promise<T[]>;
+};
+
+export async function collectPagedResults<T>(
+  makePaginator: () => Promise<BookmarkPaginator<T>>,
+  pageSize: number,
+  ...args: any[]
+): Promise<T[]> {
+  const paginator = await makePaginator();
+  const results: T[] = [];
+  let bookmark: any = undefined;
+
+  for (;;) {
+    const page = await paginator.page(1, bookmark, ...args);
+    results.push(...page);
+    bookmark = (paginator as any)._bookmark;
+    if (page.length < pageSize || !bookmark) break;
+  }
+
+  return results;
+}

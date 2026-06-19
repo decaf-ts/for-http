@@ -30,6 +30,7 @@ export class WebhookEventRecord extends Model {
   @column()
   @required()
   @index([OrderDirection.ASC, OrderDirection.DSC])
+  @index([OrderDirection.ASC, OrderDirection.DSC], ["topic", "createdAt", "id"])
   @description("subscription topic eg <model>.create, <model>.*, etc")
   topic!: string;
 

@@ -7,11 +7,12 @@ import {
   UUID,
 } from "@decaf-ts/core";
 import { WebhookSubscription } from "./models/WebhookSubscription";
-import { matchesTopic } from "./utils";
+import { collectPagedResults, matchesTopic } from "./utils";
 import type { WebhookAction, WebhookEnvelope, WebhookTopic } from "./types";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
 import { WebhookDelivery } from "./models/WebhookDelivery";
 import { WebhookStatus } from "./constants";
+import { OrderDirection } from "@decaf-ts/core";
 
 export type PublishDto<TPayload> = {
   entity: string;
@@ -48,11 +49,17 @@ export class WebhookPublisherService extends Service {
     }
 
     const now = new Date();
-
-    const activeSubscriptions = await this.subscriptions
-      .select()
-      .where(this.subscriptions.attr("active").eq(true))
-      .execute(ctx);
+    const activeSubscriptions = await collectPagedResults(
+      () =>
+        this.subscriptions
+          .select()
+          .where(this.subscriptions.attr("active").eq(true))
+          .orderBy("createdAt", OrderDirection.DSC)
+          .thenBy("id", OrderDirection.DSC)
+          .paginate(250, ctx),
+      250,
+      ctx
+    );
 
     const rows = await Promise.all(
       entries.map(async (entry) => {
@@ -93,33 +100,34 @@ export class WebhookPublisherService extends Service {
           nextAttemptAt: now,
         });
 
-        const deliveryRows = matching.map((subscription) => {
-          return new WebhookDelivery({
-            eventId: event.id,
-            subscriptionId: subscription.id,
-            topic,
-            targetUrl: subscription.url,
-            secret: subscription.secret,
-            status: WebhookStatus.PENDING,
-            attempts: 0,
-            maxAttempts: 12,
-            nextAttemptAt: now,
-            lastAttemptAt: null,
-            responseStatus: null,
-            responseBody: null,
-            errorMessage: null,
-          });
-        });
-
-        return { event, deliveryRows };
+        return { event, matching, topic };
       })
     );
 
     const eventRows = rows.map((row) => row.event);
     log.verbose(`Creating ${eventRows.length} new webhook events`);
-    await this.events.createAll(eventRows, ctx);
+    const createdEvents = await this.events.createAll(eventRows, ctx);
 
-    const deliveryRows = rows.flatMap((row) => row.deliveryRows);
+    const deliveryRows = rows.flatMap((row, i) => {
+      const createdEvent = createdEvents[i];
+      return row.matching.map((subscription) => {
+        return new WebhookDelivery({
+          eventId: createdEvent.id,
+          subscriptionId: subscription.id,
+          topic: row.topic,
+          targetUrl: subscription.url,
+          secret: subscription.secret,
+          status: WebhookStatus.PENDING,
+          attempts: 0,
+          maxAttempts: 12,
+          nextAttemptAt: now,
+          lastAttemptAt: null,
+          responseStatus: null,
+          responseBody: null,
+          errorMessage: null,
+        });
+      });
+    });
     if (!deliveryRows.length) {
       return;
     }

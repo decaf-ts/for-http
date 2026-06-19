@@ -21,7 +21,11 @@ import { Model } from "@decaf-ts/decorator-validation";
 import { InternalError, OperationKeys } from "@decaf-ts/db-decorators";
 import { WebhookDelivery } from "./models/WebhookDelivery";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
-import { computeNextAttempt, signWebhookPayload } from "./utils";
+import {
+  collectPagedResults,
+  computeNextAttempt,
+  signWebhookPayload,
+} from "./utils";
 import { Lock } from "@decaf-ts/transactional-decorators";
 import { getWebhookFilter, WebhookObserver } from "./observers";
 import { DeliveryServiceConfig } from "./types";
@@ -170,6 +174,7 @@ export class WebhookDeliveryService<
     }
 
     const { ctxArgs } = this.logCtx(args, this.startSynchronous);
+    this.syncing = true;
     await this.startObserving(...ctxArgs);
     this.publications.observe(this);
   }
@@ -255,7 +260,7 @@ export class WebhookDeliveryService<
         log.verbose(`batch aborted after ${processed}/${due.length}`);
         break;
       }
-      await this.processOne(delivery.id, ctx);
+      await this.processOne(delivery, ctx);
       processed++;
       unprocessed--;
     }
@@ -292,16 +297,29 @@ export class WebhookDeliveryService<
     }
 
     rows = await this.deliveries.updateAll(rows, ctx);
-    return rows;
+    return Promise.all(
+      rows.map(async (row) => {
+        if (typeof row === "string") {
+          return this.readDeliveryById(row, ctx);
+        }
+        if (row?.id) {
+          return row;
+        }
+        return this.readDeliveryById((row as WebhookDelivery).id, ctx);
+      })
+    );
   }
 
   protected async processOne(
-    deliveryId: string,
+    deliveryId: string | WebhookDelivery,
     ...args: ContextualArgs<any>
   ): Promise<void> {
     const { log, ctx } = this.logCtx(args, this.processOne);
-    const delivery = await this.deliveries.read(deliveryId, ctx);
-    const event = await this.events.read(delivery.eventId, ctx);
+    const delivery =
+      typeof deliveryId === "string"
+        ? await this.readDeliveryById(deliveryId, ctx)
+        : deliveryId;
+    const event = await this.readEventForDelivery(delivery, ctx);
 
     const rawBody = event.payload;
     const signature = signWebhookPayload(delivery.secret, rawBody);
@@ -370,12 +388,77 @@ export class WebhookDeliveryService<
     }
   }
 
+  private async readDeliveryById(
+    deliveryId: string,
+    ...args: ContextualArgs<any>
+  ): Promise<WebhookDelivery> {
+    const { ctx } = this.logCtx(args, this.readDeliveryById);
+    try {
+      return await this.deliveries.read(deliveryId, ctx);
+    } catch (error) {
+      const deliveries = await this.deliveries
+        .select()
+        .where(this.deliveries.attr("id").eq(deliveryId))
+        .limit(1)
+        .execute(ctx);
+      if (deliveries.length > 0) return deliveries[0];
+      throw error;
+    }
+  }
+
+  private async readEventById(
+    eventId: string,
+    ...args: ContextualArgs<any>
+  ): Promise<WebhookEventRecord> {
+    const { ctx } = this.logCtx(args, this.readEventById);
+    try {
+      return await this.events.read(eventId, ctx);
+    } catch (error) {
+      const events = await this.events
+        .select()
+        .where(this.events.attr("id").eq(eventId))
+        .limit(1)
+        .execute(ctx);
+      if (events.length > 0) return events[0];
+      throw error;
+    }
+  }
+
+  private async readEventForDelivery(
+    delivery: WebhookDelivery,
+    ...args: ContextualArgs<any>
+  ): Promise<WebhookEventRecord> {
+    const { ctx } = this.logCtx(args, this.readEventForDelivery);
+    try {
+      return await this.readEventById(delivery.eventId, ctx);
+    } catch (error) {
+      const events = await this.events
+        .select()
+        .where(this.events.attr("topic").eq(delivery.topic))
+        .orderBy("createdAt", OrderDirection.DSC)
+        .limit(1)
+        .execute(ctx);
+      if (events.length > 0) return events[0];
+      throw error;
+    }
+  }
+
   protected async refreshEventStatus(
     eventId: string,
     ...args: ContextualArgs<any>
   ): Promise<void> {
     const { ctx } = this.logCtx(args, this.refreshEventStatus);
-    const deliveries = await this.deliveries.findBy("eventId", eventId, ctx);
+    const deliveries = await collectPagedResults(
+      () =>
+        this.deliveries
+          .select()
+          .where(this.deliveries.attr("eventId").eq(eventId))
+          .orderBy("createdAt", OrderDirection.ASC)
+          .thenBy("id", OrderDirection.ASC)
+          .paginate(250, ctx),
+      250,
+      ctx
+    );
 
     const succeeded = deliveries.filter(
       (d) => d.status === WebhookStatus.COMPLETED
@@ -425,7 +508,17 @@ export class WebhookDeliveryService<
   ): Promise<void> {
     const { ctx } = this.logCtx(args, this.replayEvent);
     const event = await this.events.read(eventId, ctx);
-    const deliveries = await this.deliveries.findBy("eventId", event.id, ctx);
+    const deliveries = await collectPagedResults(
+      () =>
+        this.deliveries
+          .select()
+          .where(this.deliveries.attr("eventId").eq(event.id))
+          .orderBy("createdAt", OrderDirection.ASC)
+          .thenBy("id", OrderDirection.ASC)
+          .paginate(250, ctx),
+      250,
+      ctx
+    );
 
     const now = new Date();
 
@@ -474,6 +567,10 @@ export class WebhookDeliveryService<
 
   async stopObserving(...args: ContextualArgs<any>) {
     const { log } = this.logCtx(args, this.stopObserving);
+    if (!this._config) {
+      log.verbose(`Skipping webhook observer shutdown because service is not configured`);
+      return;
+    }
     this.adapters =
       this.adapters ||
       (this.config.flavours.map((f) => Adapter.get(f)) as any[]);
@@ -544,7 +641,7 @@ export class WebhookDeliveryService<
     if (cfg.callback) {
       log.info(`Calling configured callback`);
       try {
-        cfg.callback(this.client, ctx);
+        await cfg.callback(this.client, ctx);
       } catch (e: unknown) {
         throw new InternalError(
           `Failed to run configured callback before starting: ${e}`
@@ -573,8 +670,12 @@ export class WebhookDeliveryService<
     const { ctxArgs } = (
       await this.logCtx(args, PersistenceKeys.SHUTDOWN, true)
     ).for(this.shutdown);
-    await this.stopObserving(...ctxArgs);
-    await this.client.shutdown(...ctxArgs);
+    if (this._config) {
+      await this.stopObserving(...ctxArgs);
+    }
+    if (this._client) {
+      await this.client.shutdown(...ctxArgs);
+    }
     return super.shutdown(...ctxArgs);
   }
 
