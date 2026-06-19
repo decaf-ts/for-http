@@ -36,6 +36,17 @@
         "default": "./lib/cjs/server/index.cjs"
       },
       "default": "./lib/esm/server/index.js"
+    },
+    "./hooks": {
+      "import": {
+        "types": "./lib/types/server/hooks/index.d.mts",
+        "default": "./lib/esm/server/hooks/index.js"
+      },
+      "require": {
+        "types": "./lib/types/server/hooks/index.d.cts",
+        "default": "./lib/cjs/server/hooks/index.cjs"
+      },
+      "default": "./lib/esm/server/hooks/index.js"
     }
   },
   "types": "./lib/types/index.d.mts",
