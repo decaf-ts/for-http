@@ -1,6 +1,7 @@
 import { WebhookSubscription } from "../../src/server/hooks/models/WebhookSubscription";
 import { WebhookEventRecord } from "../../src/server/hooks/models/WebhookEventRecord";
 import { WebhookDelivery } from "../../src/server/hooks/models/WebhookDelivery";
+import "../../src/server/hooks/overrides";
 import {
   WebhookDeliveryMode,
   WebhookStatus,
@@ -36,7 +37,7 @@ import {
   hook,
   WebhookPublisherService,
   WebhookSubscriptionService,
-} from "../../src/server/index";
+} from "../../src/server/hooks";
 import { signWebhookPayload } from "../../src/server/hooks/utils";
 import { Constructor, uses } from "@decaf-ts/decoration";
 import { OperationKeys } from "@decaf-ts/db-decorators";
@@ -438,7 +439,10 @@ describe("Webhook Engine Full Integration Test", () => {
           data: { status: "ok", endpoint: "/webhook1" },
         } as any);
 
-      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
+      await (deliveryService as any).processOne(
+        delivery.id,
+        Context.factory({})
+      );
 
       expect(postSpy).toHaveBeenCalledTimes(1);
 
@@ -456,7 +460,10 @@ describe("Webhook Engine Full Integration Test", () => {
         data: { error: "Internal Server Error" },
       } as any);
 
-      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
+      await (deliveryService as any).processOne(
+        delivery.id,
+        Context.factory({})
+      );
 
       const refreshed = await deliveryRepo.read(delivery.id);
       expect(refreshed.status).toBe(WebhookStatus.FAILED);
@@ -471,7 +478,10 @@ describe("Webhook Engine Full Integration Test", () => {
         data: { error: "Service Unavailable" },
       } as any);
 
-      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
+      await (deliveryService as any).processOne(
+        delivery.id,
+        Context.factory({})
+      );
 
       const refreshed = await deliveryRepo.read(delivery.id);
       expect(refreshed.status).toBe(WebhookStatus.FAILED);
@@ -501,7 +511,10 @@ describe("Webhook Engine Full Integration Test", () => {
           data: { status: "ok", endpoint: "/webhook1" },
         } as any);
 
-      await (deliveryService as any).processOne(delivery.id, Context.factory({}));
+      await (deliveryService as any).processOne(
+        delivery.id,
+        Context.factory({})
+      );
 
       expect(postSpy).toHaveBeenCalledTimes(1);
       const [, body, options] = postSpy.mock.calls[0];
@@ -544,13 +557,16 @@ describe("Webhook Engine Full Integration Test", () => {
 
       if (failedDeliveries.length > 0) {
         const toReplay = failedDeliveries[0];
-        await deliveryService.replayEvent(toReplay.eventId, Context.factory({}));
+        await deliveryService.replayEvent(
+          toReplay.eventId,
+          Context.factory({})
+        );
 
-      const replayed = await deliveryRepo
-        .select()
-        .where(deliveryRepo.attr("eventId").eq(toReplay.eventId))
-        .limit(250)
-        .execute();
+        const replayed = await deliveryRepo
+          .select()
+          .where(deliveryRepo.attr("eventId").eq(toReplay.eventId))
+          .limit(250)
+          .execute();
         expect(replayed.length).toBeGreaterThan(0);
         for (const d of replayed) {
           expect(d.attempts).toBe(0);
@@ -569,7 +585,8 @@ describe("Webhook Engine Full Integration Test", () => {
       const events = await eventRepo.select().limit(250).execute();
       expect(events.length).toBeGreaterThan(0);
 
-      const deliveryCount = (await deliveryRepo.select().limit(250).execute()).length;
+      const deliveryCount = (await deliveryRepo.select().limit(250).execute())
+        .length;
       expect(deliveryCount).toBeGreaterThan(0);
     }, 20000);
 

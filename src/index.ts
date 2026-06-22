@@ -18,7 +18,6 @@ export * from "./RestRepository";
 export * from "./RestService";
 export * from "./types";
 export * from "./event";
-export * from "./server";
 
 /**
  * @description Current version of the for-http module
@@ -42,7 +41,6 @@ export const COMMIT = "##COMMIT##";
  * @const FULL_VERSION
  */
 export const FULL_VERSION = "##FULL_VERSION##";
-
 
 export const PACKAGE_NAME = "##PACKAGE##";
 

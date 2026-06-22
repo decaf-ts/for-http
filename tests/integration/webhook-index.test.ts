@@ -1,7 +1,8 @@
 import { Repository } from "@decaf-ts/core";
 import { WebhookStatus } from "../../src/server/hooks/constants";
 import { NanoAdapter } from "@decaf-ts/for-nano";
-import { WebhookDelivery } from "../../src/server/index";
+import { WebhookDelivery } from "../../src/server/hooks";
+import "../../src/server/hooks/overrides";
 
 async function createNanoTestResources() {
   const adminUser = process.env.NANO_ADMIN_USER || "couchdb.admin";

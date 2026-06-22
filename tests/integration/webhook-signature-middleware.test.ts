@@ -4,6 +4,7 @@ import { signWebhookPayload } from "../../src/server/hooks/utils";
 import { WebhookSubscriptionService } from "../../src/server/hooks/SubscriptionService";
 import { ConflictError, NotFoundError } from "@decaf-ts/db-decorators";
 import { NanoAdapter } from "@decaf-ts/for-nano";
+import "../../src/server/hooks/overrides";
 
 // Initialize NanoAdapter decoration first
 NanoAdapter.decoration();

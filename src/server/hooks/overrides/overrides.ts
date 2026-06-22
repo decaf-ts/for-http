@@ -1,7 +1,7 @@
 import { Constructor, Metadata } from "@decaf-ts/decoration";
 import { Model } from "@decaf-ts/decorator-validation";
-import { HookKey } from "../hooks/constants";
-import { HookMetadata } from "../hooks/decorators";
+import { HookKey } from "../constants";
+import { HookMetadata } from "../decorators";
 
 (Model as any).hooks = function hooks<M extends Model>(
   m: M | Constructor<M>,
