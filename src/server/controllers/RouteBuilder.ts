@@ -11,6 +11,7 @@ export class ServerMethodBuilder {
   private queryParams: RouteParam[] = [];
   private bodySchema?: any;
   private responses?: Record<number, RouteResponse>;
+  private implementation?: (...args: any[]) => any;
 
   withMethod(method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH"): this {
     this.method = method;
@@ -76,12 +77,13 @@ export class ServerMethodBuilder {
     return this;
   }
 
-  withImplementation() {
+  withImplementation(implementation: (...args: any[]) => any): this {
+    this.implementation = implementation;
     return this;
   }
 
   build(): ServerRoute {
-    return new ServerRoute({
+    const route = new ServerRoute({
       method: this.method,
       path: this.path,
       summary: this.summary,
@@ -94,5 +96,7 @@ export class ServerMethodBuilder {
       bodySchema: this.bodySchema,
       responses: this.responses,
     });
+    route.implementation = this.implementation;
+    return route;
   }
 }

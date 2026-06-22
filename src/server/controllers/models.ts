@@ -90,6 +90,8 @@ export class ServerRoute extends Model {
   @prop()
   redirectStatusCode?: number;
 
+  implementation?: (...args: any[]) => any;
+
   constructor(arg?: ModelArg<ServerRoute>) {
     super(arg);
     Model.fromObject(this, arg);

@@ -1,13 +1,13 @@
 import { ServerRoute } from "./models";
 import { ServerMethodBuilder } from "./RouteBuilder";
 
-export abstract class ServerControllerBuilder<C = any> {
+export class ServerControllerBuilder<C = any> {
   protected prefix: string = "";
   protected path: string = "";
   protected tags: string[] = [];
   protected methods: ServerRoute[] = [];
 
-  protected constructor() {}
+  constructor() {}
 
   withPrefix(prefix: string): this {
     this.prefix = prefix;
@@ -48,10 +48,45 @@ export abstract class ServerControllerBuilder<C = any> {
     return this;
   }
 
-  abstract build(): C;
+  build(): C {
+    const routeMethods = [...this.methods];
+    const routeMap = new Map<string, ServerRoute>();
+    const controllerClass = class {};
+
+    for (const route of routeMethods) {
+      const methodName = this.getMethodName(route);
+      routeMap.set(methodName, route);
+
+      Object.defineProperty(controllerClass.prototype, methodName, {
+        configurable: true,
+        enumerable: false,
+        writable: false,
+        value: route.implementation ?? (() => void 0),
+      });
+    }
+
+    Object.defineProperty(controllerClass, "__routes__", {
+      configurable: false,
+      enumerable: false,
+      writable: false,
+      value: routeMethods,
+    });
+
+    Object.defineProperty(controllerClass, "__routeMap__", {
+      configurable: false,
+      enumerable: false,
+      writable: false,
+      value: routeMap,
+    });
+
+    return controllerClass as unknown as C;
+  }
 
   protected getMethodName(route: ServerRoute): string {
     const segments = route.path.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return route.method.toLowerCase();
+    }
     const lastSegment = segments[segments.length - 1];
 
     if (lastSegment.startsWith(":") || lastSegment.startsWith("{")) {
