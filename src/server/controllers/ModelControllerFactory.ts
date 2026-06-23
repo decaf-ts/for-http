@@ -61,7 +61,7 @@ export class ModelControllerFactory {
   ): C {
     const builder = new ModelControllerBuilder<T, C>(ModelConstr, persistence);
     const allowStatementlessQuery = config?.allowStatementlessQuery ?? true;
-    const allowGroupingQueries = config?.allowGroupingQueries ?? false;
+    const allowGroupingQueries = config?.allowGroupingQueries ?? true;
 
     builder
       .addCreateRoute()
@@ -75,6 +75,14 @@ export class ModelControllerFactory {
     if (bulkEnabled(config, "delete")) builder.addBulkDeleteRoute();
 
     builder.addStatementRoute();
+
+    builder
+      .addListByRoute()
+      .addPaginateByRoute()
+      .addFindRoute()
+      .addPageRoute()
+      .addFindOneByRoute()
+      .addFindByRoute();
 
     if (allowStatementlessQuery) builder.addComplexQueries(persistence);
 
