@@ -2,8 +2,8 @@ import { BaseModel, column, pk, query, route, table } from "@decaf-ts/core";
 import { model, required, type ModelArg } from "@decaf-ts/decorator-validation";
 import { ModelControllerBuilder } from "../../src/server/controllers/ModelControllerBuilder";
 import { ModelControllerFactory } from "../../src/server/controllers/ModelControllerFactory";
-import { Product } from "../../../for-nest/tests/unit/Product";
-import { ProductMarket } from "../../../for-nest/tests/unit/ProductMarket";
+import { Product } from "./models/Product";
+import { ProductMarket } from "./models/ProductMarket";
 
 @table("factory_query_model")
 @model()
@@ -65,7 +65,14 @@ describe("server/controllers/ModelControllerFactory", () => {
       .addBulkUpdateRoute()
       .addBulkDeleteRoute()
       .addStatementRoute()
+      .addListByRoute()
+      .addPaginateByRoute()
+      .addFindRoute()
+      .addPageRoute()
+      .addFindOneByRoute()
+      .addFindByRoute()
       .addComplexQueries(persistence)
+      .addGroupingQueryRoute()
       .build();
 
     expect(routesOf(factoryClass)).toEqual(routesOf(builderClass));
@@ -91,6 +98,13 @@ describe("server/controllers/ModelControllerFactory", () => {
           .addBulkUpdateRoute()
           .addBulkDeleteRoute()
           .addStatementRoute()
+          .addListByRoute()
+          .addPaginateByRoute()
+          .addFindRoute()
+          .addPageRoute()
+          .addFindOneByRoute()
+          .addFindByRoute()
+          .addGroupingQueryRoute()
           .build()
       )
     );
@@ -109,6 +123,13 @@ describe("server/controllers/ModelControllerFactory", () => {
       .addBulkReadRoute()
       .addBulkDeleteRoute()
       .addStatementRoute()
+      .addListByRoute()
+      .addPaginateByRoute()
+      .addFindRoute()
+      .addPageRoute()
+      .addFindOneByRoute()
+      .addFindByRoute()
+      .addGroupingQueryRoute()
       .build();
 
     expect(routesOf(factoryClass)).toEqual(routesOf(expectedClass));

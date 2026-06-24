@@ -132,6 +132,9 @@
     "axios": "^1.15.2",
     "event-source-plus": "^0.1.15"
   },
+  "overrides": {
+    "js-yaml": "^4.2.0"
+  },
   "main": "./lib/cjs/index.cjs",
   "module": "./lib/esm/index.js",
   "sideEffects": [

@@ -50,6 +50,17 @@ function composedRoutePaths<T extends Model<boolean>>(
     }
   }
 
+  // Also generate a route with ALL filterEmpty fields removed (not just
+  // trailing ones). This handles the case where filterEmpty fields are in
+  // the middle of the composed PK (e.g. Leaflet's filterEmpty=["batchNumber",
+  // "epiMarket"] where batchNumber is the 2nd of 5 args). The trailing-removal
+  // loop above can only omit fields from the end, so we add this route to
+  // cover the case where all filterEmpty fields are empty at once.
+  const nonFilterEmpty = args.filter((a) => !canOmit(a));
+  if (nonFilterEmpty.length > 0 && nonFilterEmpty.length < args.length) {
+    routes.push(`:${nonFilterEmpty.join("/:")}`);
+  }
+
   return Array.from(new Set(routes));
 }
 
