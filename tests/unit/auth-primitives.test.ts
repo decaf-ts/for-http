@@ -28,12 +28,7 @@ describe("server auth primitives", () => {
           return { user: token, roles: ["user"] };
         }
 
-        protected bindToContext(
-          context: Context,
-          data: AuthData,
-          ctx?: MyCtx
-        ): void {
-          void ctx;
+        protected override bindToContext(context: Context, data: AuthData): void {
           context.accumulate({ UUID: data.user, organization: data.organization });
         }
       }
@@ -56,7 +51,7 @@ describe("server auth primitives", () => {
         return context;
       };
 
-      await handler.authorize(ctx, "Model", context);
+      await handler.authorize(ctx, "Model", undefined, context);
       expect(store.UUID).toBe("Bearer abc");
     });
 
@@ -72,15 +67,6 @@ describe("server auth primitives", () => {
             throw new AuthorizationError("no token");
           return { roles: ["user"] };
         }
-
-        protected bindToContext(
-          context: Context,
-          data: AuthData,
-          ctx?: MyCtx
-        ): void {
-          void ctx;
-          context.accumulate({ UUID: data.user, organization: data.organization });
-        }
       }
 
       const handler = new MinimalHandler();
@@ -93,7 +79,7 @@ describe("server auth primitives", () => {
       };
 
       const context = new Context();
-      await handler.authorize(ctx, "Model", context);
+      await handler.authorize(ctx, "Model", undefined, context);
     });
 
     it("checks requiredRoles passed before the context arg", async () => {
@@ -104,15 +90,6 @@ describe("server auth primitives", () => {
       class RoleHandler extends AuthHandler<MyCtx, Context, AuthData> {
         protected extractFromAuth(ctx: MyCtx): AuthData {
           return { roles: ctx.getRoles() };
-        }
-
-        protected bindToContext(
-          context: Context,
-          data: AuthData,
-          ctx?: MyCtx
-        ): void {
-          void ctx;
-          context.accumulate({ UUID: data.user, organization: data.organization });
         }
       }
 
@@ -129,7 +106,7 @@ describe("server auth primitives", () => {
       ).resolves.toBeUndefined();
 
       await expect(
-        handler.authorize(ctx, "Model", context)
+        handler.authorize(ctx, "Model", undefined, context)
       ).resolves.toBeUndefined();
     });
 
@@ -156,12 +133,10 @@ describe("server auth primitives", () => {
           };
         }
 
-        protected bindToContext(
+        protected override bindToContext(
           context: Context,
-          data: RichAuthData,
-          ctx?: MyCtx
+          data: RichAuthData
         ): void {
-          void ctx;
           context.accumulate({
             UUID: data.user,
             organization: data.tenant,
@@ -181,9 +156,52 @@ describe("server auth primitives", () => {
         return context;
       };
 
-      await handler.authorize(ctx, "Model", context);
+      await handler.authorize(ctx, "Model", undefined, context);
       expect(store.UUID).toBe("user123");
       expect(store.organization).toBe("acme");
+    });
+
+    it("allows overriding validate for custom token validation", async () => {
+      interface MyCtx {
+        getToken(): string;
+      }
+
+      class ValidatingHandler extends AuthHandler<MyCtx, Context, AuthData> {
+        protected extractFromAuth(ctx: MyCtx): AuthData {
+          return { user: ctx.getToken(), roles: ["user"] };
+        }
+
+        protected override async validate(
+          data: AuthData,
+          routeRoles: string[] | undefined,
+          model: string | Constructor,
+          ...args: ContextualArgs<Context>
+        ): Promise<void> {
+          if (!data.user || data.user === "invalid")
+            throw new AuthorizationError("Token rejected by custom validate");
+          await super.validate(data, routeRoles, model, ...args);
+        }
+      }
+
+      const handler = new ValidatingHandler();
+
+      await expect(
+        handler.authorize(
+          { getToken: () => "invalid" },
+          "Model",
+          undefined,
+          new Context()
+        )
+      ).rejects.toThrow("Token rejected");
+
+      await expect(
+        handler.authorize(
+          { getToken: () => "valid" },
+          "Model",
+          undefined,
+          new Context()
+        )
+      ).resolves.toBeUndefined();
     });
   });
 });

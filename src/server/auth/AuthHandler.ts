@@ -27,12 +27,12 @@ import {
 } from "@decaf-ts/core";
 import { Model } from "@decaf-ts/decorator-validation";
 
-import type { AuthData } from "./types";
+import type { AuthData, UserData } from "./types";
 
 export abstract class AuthHandler<
   EC = unknown,
   C extends Context = Context,
-  D extends AuthData = AuthData,
+  D extends UserData = AuthData,
 > extends ContextualLoggedClass<C> {
   /**
    * Extracts auth data from the platform-specific execution context.
@@ -57,10 +57,11 @@ export abstract class AuthHandler<
    *
    * @param context - The request context (always the last arg of `authorize`).
    * @param data - The auth data returned by {@link extractFromAuth}.
-   * @param ctx - The execution context (optional, used by handlers that need
    *   access to the platform request).
    */
-  protected abstract bindToContext(context: C, data: D, ctx?: EC): void;
+  protected bindToContext(ctx: C, data: D) {
+    ctx.accumulate(data);
+  }
 
   /**
    * Authorizes an incoming request against a model resource.
@@ -72,45 +73,62 @@ export abstract class AuthHandler<
    * The request context is always the **last** argument via
    * `...args: ContextualArgs<C, [string[]?]>`, matching the Decaf convention.
    *
-   * @param ctx - The platform execution context.
+   * @param context - The platform execution context.
    * @param model - Model name or constructor being accessed.
    * @param args - `[requiredRoles?, context]` or `[context]`.
    */
   async authorize(
-    ctx: EC,
+    context: EC,
     model: string | Constructor,
+    requiredRoles: string[] | undefined,
     ...args: ContextualArgs<C, [string[]?]>
   ): Promise<void> {
-    const { ctx: context, log, ctxArgs } = this.logCtx(args, this.authorize);
+    const { ctx, log, ctxArgs } = this.logCtx(args, this.authorize);
+    log.debug(
+      `Authorizing access to ${typeof model === "string" ? model : model.name}`
+    );
 
-    const requiredRoles =
-      ctxArgs.length > 1 ? (ctxArgs[0] as string[] | undefined) : undefined;
+    const data: D = await this.extractFromAuth(context);
+    await this.validate(data, requiredRoles, model, ...ctxArgs);
+    this.bindToContext(ctx, data);
+    log.debug(`Authorization granted for user ${data.user ?? "unknown"}`);
+  }
 
-    log.debug(`Authorizing access to ${typeof model === "string" ? model : model.name}`);
-
-    const data = await this.extractFromAuth(ctx);
-
-    if (requiredRoles && requiredRoles.length > 0) {
-      const missing = requiredRoles.filter((r) => !data.roles.includes(r));
-      if (missing.length > 0) {
-        throw new AuthorizationError(
-          `Missing required roles: ${missing.join(", ")}`
-        );
-      }
+  protected async validate(
+    data: D,
+    routeRoles: string[] | undefined,
+    model: string | Constructor,
+    ...args: ContextualArgs<C>
+  ) {
+    const { log } = this.logCtx(args, this.validate);
+    if (routeRoles && routeRoles.length) {
+      log.silly(`validating route roles for ${data.user}`);
+      this.validateRouteRoles(routeRoles, data);
     }
 
     const modelRoles = this.resolveModelRoles(model);
     if (modelRoles && modelRoles.length > 0) {
-      const hasRole = modelRoles.some((r) => data.roles.includes(r));
-      if (!hasRole) {
-        throw new AuthorizationError(
-          `User lacks any of the required model roles: ${modelRoles.join(", ")}`
-        );
-      }
+      log.silly(`validating model roles for ${data.user}`);
+      this.validateModelRoles(modelRoles, data);
     }
+  }
 
-    this.bindToContext(context, data, ctx);
-    log.debug(`Authorization granted for user ${data.user ?? "unknown"}`);
+  protected validateRouteRoles(requiredRoles: string[], data: D) {
+    const missing = requiredRoles.filter((r) => !data.roles?.includes(r));
+    if (missing.length > 0) {
+      throw new AuthorizationError(
+        `Missing required roles: ${missing.join(", ")}`
+      );
+    }
+  }
+
+  protected validateModelRoles(modelRoles: string[], data: D) {
+    const missing = modelRoles.filter((r) => !data.roles?.includes(r));
+    if (missing.length > 0) {
+      throw new AuthorizationError(
+        `Missing required roles: ${missing.join(", ")}`
+      );
+    }
   }
 
   /**

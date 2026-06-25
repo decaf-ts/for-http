@@ -20,17 +20,20 @@ export interface AuthRequestLike {
   [key: symbol | string]: unknown;
 }
 
+export interface UserData {
+  /** Authenticated user identifier (email, username, subject, etc.). */
+  user?: string;
+  /** Roles granted to the user (from JWT, header, or other auth source). */
+  roles?: string[];
+}
+
 /**
  * Auth data extracted from the request by {@link AuthHandler.extractFromAuth}.
  *
  * Concrete handlers may return a wider object — the extra fields can be bound to
  * the request context by overriding {@link AuthHandler.bindToContext}.
  */
-export interface AuthData {
-  /** Authenticated user identifier (email, username, subject, etc.). */
-  user?: string;
+export interface AuthData extends UserData {
   /** Organization / tenant / MSP the user belongs to. */
   organization?: string;
-  /** Roles granted to the user (from JWT, header, or other auth source). */
-  roles: string[];
 }
