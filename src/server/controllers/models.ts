@@ -2,7 +2,7 @@ import {
   list,
   minlength,
   Model,
-  ModelArg,
+  type ModelArg,
   option,
   required,
   type,
