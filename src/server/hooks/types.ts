@@ -31,6 +31,7 @@ export type DeliveryServiceConfig<A extends Adapter<any, any, any, any>> = {
   mode: WebhookDeliveryMode;
   batchSize?: number;
   pollIntervalMs?: number;
+  gracefulShutdownMsTimeout?: number;
   topics?: string[];
   models: Constructor<Model<boolean>>[];
   flavours: string[];

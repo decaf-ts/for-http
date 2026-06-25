@@ -350,6 +350,446 @@ for (const migration of migrations) {
 
 Control ordering through `@migration`: the `reference` string is your log-level semver label, `precedence` lets you force ordering between migrations sharing the same version/flavour, `flavour` restricts execution to specific adapters, and `rules` are async predicates that can skip a migration when its prerequisites are missing.
 
+## Webhook Engine
+
+The webhook engine is a complete publish/subscribe system that delivers HTTP notifications to external endpoints when model data changes. It supports topic-based subscriptions, HMAC-SHA256 payload signing, exponential backoff retries, and two delivery modes (polling and synchronous).
+
+### Architecture Overview
+
+```
+Model Change (create/update/delete)
+        │
+        ▼
+   Adapter Observer
+        │
+        ▼
+  WebhookObserver (filters by topic)
+        │
+        ▼
+  WebhookPublisherService
+        │
+        ├── Creates WebhookEventRecord (one per change)
+        └── Creates WebhookDelivery rows (one per matching subscription)
+              │
+              ▼
+        WebhookDeliveryService
+              │
+    ┌─────────┴──────────┐
+    │ POLLING mode        │ SYNCHRONOUS mode
+    │ pollLoop → tick →   │ refresh() → processMany()
+    │ processBatch()      │ (immediate delivery)
+    └────────────────────┘
+              │
+              ▼
+        processOne() → HTTP POST to subscription URL
+              │
+              ├── Success → status=COMPLETED
+              └── Failure → status=FAILED, schedule retry
+```
+
+### Models
+
+Three persistence models store the webhook state. All use UUID primary keys and are decorated with standard decaf-ts column/index/table decorators.
+
+#### WebhookSubscription (`webhook_subscriptions` table)
+
+Represents an external endpoint subscribed to one or more topics.
+
+| Field       | Type          | Required | Description                                               |
+|-------------|---------------|----------|-----------------------------------------------------------|
+| `id`        | string (UUID) | yes      | Primary key                                               |
+| `topic`     | string        | yes      | Topic pattern, e.g. `product.created`, `product.*`, `*.*` |
+| `url`       | string        | yes      | Target URL for HTTP POST delivery                         |
+| `secret`    | string        | yes      | HMAC secret used to sign payloads                         |
+| `active`    | boolean       | yes      | Whether this subscription receives deliveries             |
+| `createdAt` | Date          | auto     | Creation timestamp                                        |
+| `updatedAt` | Date          | auto     | Last update timestamp                                     |
+
+#### WebhookEventRecord (`webhook_events` table)
+
+Represents a single model change event that may be delivered to multiple subscriptions.
+
+| Field                 | Type            | Required | Description                             |
+|-----------------------|-----------------|----------|-----------------------------------------|
+| `id`                  | string (UUID)   | yes      | Primary key                             |
+| `topic`               | string          | yes      | Full topic, e.g. `product.created`      |
+| `model`               | string          | yes      | Model name                              |
+| `action`              | string          | yes      | Action: `created`, `updated`, `deleted` |
+| `entityId`            | string          | yes      | ID of the changed entity                |
+| `payload`             | string (JSON)   | yes      | JSON-serialized `WebhookEnvelope`       |
+| `status`              | `WebhookStatus` | yes      | `pending`, `completed`, `failed`        |
+| `deliveriesTotal`     | number          | yes      | Total deliveries created                |
+| `deliveriesSucceeded` | number          | no       | Count of successful deliveries          |
+| `deliveriesFailed`    | number          | no       | Count of permanently failed deliveries  |
+| `nextAttemptAt`       | Date            | yes      | Next scheduled delivery attempt         |
+| `createdAt`           | Date            | auto     | Creation timestamp                      |
+| `updatedAt`           | Date            | auto     | Last update timestamp                   |
+
+#### WebhookDelivery (`webhook_deliveries` table)
+
+Represents a single delivery attempt to one subscription endpoint.
+
+| Field            | Type            | Required | Description                                    |
+|------------------|-----------------|----------|------------------------------------------------|
+| `id`             | string (UUID)   | yes      | Primary key                                    |
+| `eventId`        | string          | yes      | FK to `WebhookEventRecord.id`                  |
+| `subscriptionId` | string          | yes      | FK to `WebhookSubscription.id`                 |
+| `topic`          | string          | yes      | Delivery topic                                 |
+| `targetUrl`      | string          | yes      | Destination URL                                |
+| `secret`         | string          | yes      | HMAC secret (copied from subscription)         |
+| `attempts`       | number          | yes      | Number of delivery attempts made               |
+| `maxAttempts`    | number          | yes      | Maximum retry attempts (default 12)            |
+| `nextAttemptAt`  | Date            | yes      | Next scheduled retry                           |
+| `lastAttemptAt`  | Date            | no       | Last attempt timestamp                         |
+| `responseStatus` | number          | no       | HTTP status code received                      |
+| `responseBody`   | string          | no       | Response body (truncated to 50KB)              |
+| `errorMessage`   | string          | no       | Error message if failed                        |
+| `status`         | `WebhookStatus` | yes      | `pending`, `processing`, `completed`, `failed` |
+| `createdAt`      | Date            | auto     | Creation timestamp                             |
+| `updatedAt`      | Date            | auto     | Last update timestamp                          |
+
+### Enums
+
+```ts
+enum WebhookStatus {
+  PENDING = "pending",
+  COMPLETED = "completed",
+  FAILED = "failed",
+  PROCESSING = "processing",
+}
+
+enum WebhookDeliveryMode {
+  POLLING = "polling",
+  SYNCHRONOUS = "synchronous",
+}
+```
+
+### Decorator: `@hook`
+
+Marks a model for webhook observation. Only models decorated with `@hook` generate webhook events on create/update/delete.
+
+```ts
+import { hook } from "@decaf-ts/for-http/hooks";
+import { OperationKeys } from "@decaf-ts/db-decorators";
+import { Model, model } from "@decaf-ts/decorator-validation";
+import { table, pk, column } from "@decaf-ts/core";
+
+@table("products")
+@model()
+@hook() // defaults to [CREATE, UPDATE, DELETE]
+export class Product extends Model {
+  @pk() id!: string;
+  @column() name!: string;
+}
+
+// Limit to specific operations
+@hook([OperationKeys.CREATE, OperationKeys.DELETE])
+export class AuditLog extends Model {
+  @pk() id!: string;
+  @column() message!: string;
+}
+```
+
+The decorator generates topics from the model name and operations:
+- `Product` with `[CREATE, UPDATE, DELETE]` → `product.created`, `product.updated`, `product.deleted`
+- With `allowWildcard: true` in the config, an additional `product.*` topic is registered
+
+### Topic Matching
+
+Topics follow the `<entity>.<action>` pattern. Subscriptions can use wildcards:
+
+| Subscription Topic | Matches                             |
+|--------------------|-------------------------------------|
+| `product.created`  | Only `product.created` events       |
+| `product.*`        | All events for the `product` entity |
+| `*.*`              | All events for all entities         |
+
+### Services
+
+#### WebhookDeliveryService
+
+The core engine that manages the delivery lifecycle. Initialized with a `DeliveryServiceConfig` and an adapter for persistence.
+
+```ts
+import { WebhookDeliveryService, WebhookDeliveryMode } from "@decaf-ts/for-http/hooks";
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { NanoAdapter } from "@decaf-ts/for-nano";
+import { Context } from "@decaf-ts/core";
+
+const deliveryService = new WebhookDeliveryService<NanoAdapter>();
+
+await deliveryService.initialize({
+  adapter: NanoAdapter,           // Adapter constructor or instance
+  config: { ... },                // Adapter configuration
+  httpAdapter: AxiosHttpAdapter,  // For sending HTTP POST to endpoints
+  httpConfig: { protocol: "http", host: "localhost:3000" },
+  mode: WebhookDeliveryMode.POLLING,
+  autoStart: false,               // Don't auto-start the polling loop
+  models: [Product],              // Models to observe
+  flavours: ["nano"],             // Adapter flavours to observe
+  batchSize: 10,                  // Deliveries per batch
+  pollIntervalMs: 100,            // Poll interval in ms
+  gracefulShutdownMsTimeout: 30_000, // Max wait for in-flight deliveries on shutdown
+  allowWildcard: true,            // Register `model.*` topics
+  callback: async (adapter) => {  // Optional post-init callback
+    await adapter["index"](
+      WebhookEventRecord,
+      WebhookSubscription,
+      WebhookDelivery
+    );
+  },
+}, Context.factory({ operation: "init", headers: {}, overrides: {} }));
+
+// Start the delivery engine
+await deliveryService.start(ctx);
+
+// Manually process a batch (useful in tests or manual mode)
+const processed = await deliveryService.processBatch(10, ctx);
+
+// Replay a failed event (resets all its deliveries)
+await deliveryService.replayEvent(eventId, ctx);
+
+// Graceful shutdown — stops polling, waits for in-flight deliveries
+await deliveryService.stop(ctx);
+```
+
+**Delivery modes:**
+- `POLLING`: A background loop claims and processes due deliveries every `pollIntervalMs`. Suitable for most production setups.
+- `SYNCHRONOUS`: Deliveries happen inline during the model operation. The `WebhookDeliveryService` observes model changes directly and calls `processMany()` immediately. No polling loop runs.
+
+**Graceful shutdown:**
+- `stop()` sets `polling = false`, aborts the `AbortController` (breaking the poll loop), stops observing model changes, and waits for `running` to become `false`.
+- If in-flight deliveries don't finish within `gracefulShutdownMsTimeout` (default 30s), it logs an error and resolves so the process can exit.
+- `shutdown()` calls `stop()` first, then shuts down the persistence client.
+- The currently executing `processOne()` HTTP POST (10s timeout) is allowed to complete; subsequent deliveries in the batch are skipped.
+
+#### WebhookPublisherService
+
+Creates `WebhookEventRecord` and `WebhookDelivery` rows when a model change occurs. Called internally by `WebhookObserver`; you typically don't interact with it directly, but you can publish custom events:
+
+```ts
+import { WebhookPublisherService } from "@decaf-ts/for-http/hooks";
+
+const publisher = new WebhookPublisherService();
+
+await publisher.publish({
+  entity: "order",
+  action: "created",
+  entityId: "order-123",
+  payload: { id: "order-123", total: 99.99 },
+}, ctx);
+```
+
+The publisher:
+1. Queries all active subscriptions
+2. Matches subscriptions to the event topic
+3. Creates a `WebhookEventRecord` (status `PENDING` if matches found, `COMPLETED` otherwise)
+4. Creates one `WebhookDelivery` per matching subscription
+
+#### WebhookSubscriptionService
+
+CRUD service for `WebhookSubscription` with convenience methods:
+
+```ts
+import { WebhookSubscriptionService } from "@decaf-ts/for-http/hooks";
+
+const subService = new WebhookSubscriptionService();
+
+// Create a subscription (active defaults to true)
+const sub = await subService.create({
+  topic: "product.*",
+  url: "https://example.com/webhooks",
+  secret: "my-hmac-secret",
+}, ctx);
+
+// List active subscriptions
+const active = await subService.list(ctx);
+
+// List all subscriptions (including inactive)
+const all = await subService.listAll(ctx);
+
+// Deactivate / reactivate
+await subService.deactivate(sub.id, ctx);
+await subService.reactivate(sub.id, ctx);
+```
+
+### Delivery HTTP Payload
+
+Each delivery sends an HTTP POST to the subscription's `targetUrl` with:
+
+**Headers:**
+| Header | Description |
+|--------|-------------|
+| `content-type` | `application/json` |
+| `x-webhook-id` | The event ID |
+| `x-webhook-topic` | The topic (e.g. `product.created`) |
+| `x-webhook-signature` | HMAC-SHA256 hex digest of the payload body |
+
+**Body:** The JSON-serialized `WebhookEnvelope`:
+```json
+{
+  "id": "evt-uuid",
+  "topic": "product.created",
+  "entity": "product",
+  "action": "created",
+  "entityId": "prod-123",
+  "occurredAt": "2026-01-01T00:00:00.000Z",
+  "payload": { ... }
+}
+```
+
+### Signature Verification (Receiver Side)
+
+Use `verifyWebhookSignature` to validate incoming webhook deliveries:
+
+```ts
+import { verifyWebhookSignature } from "@decaf-ts/for-http/hooks";
+
+const isValid = verifyWebhookSignature(
+  subscriptionSecret,  // The shared secret
+  rawBody,             // The raw request body string
+  signatureHeader      // The x-webhook-signature header value
+);
+```
+
+Or use the built-in middleware:
+
+```ts
+import { WebhookSignatureMiddleware } from "@decaf-ts/for-http/hooks";
+
+const middleware = new WebhookSignatureMiddleware({
+  headerNames: {
+    signature: "x-webhook-signature",
+    webhookId: "x-webhook-id",
+    topic: "x-webhook-topic",
+  },
+  logging: {
+    enabled: true,
+    level: "info",
+    includePayloadHash: true,
+  },
+});
+
+// In an Express-style handler:
+await middleware.verify(req, res, next);
+```
+
+The middleware:
+1. Extracts the signature from the configured header (supports `hmac-sha256=`, `sha256=`, or raw hex)
+2. Looks up the subscription by matching the request URL to `WebhookSubscription.url`
+3. Verifies the HMAC-SHA256 signature using `timingSafeEqual` (constant-time comparison)
+4. Returns `400` (missing/invalid signature) or `401` (subscription not found / signature mismatch) on failure
+
+### Retry Strategy
+
+Failed deliveries use exponential backoff:
+
+| Attempt | Delay           |
+|---------|-----------------|
+| 1       | 30s             |
+| 2       | 1min            |
+| 3       | 2min            |
+| 4       | 4min            |
+| 5       | 8min            |
+| 6       | 16min           |
+| ...     | capped at 30min |
+
+After `maxAttempts` (default 12) the delivery is marked `FAILED` permanently. The event status is recalculated after each delivery:
+- All deliveries `COMPLETED` → event `COMPLETED`
+- Some deliveries still pending/retrying → event `PENDING`
+- All deliveries `FAILED` (exhausted retries) → event `FAILED`
+
+### NestJS Integration (for-nest)
+
+In a NestJS application, use `DecafWebhookModule` which auto-generates CRUD controllers for the three webhook models plus action endpoints:
+
+```ts
+import { DecafWebhookModule } from "@decaf-ts/for-nest";
+
+@Module({
+  imports: [
+    await DecafWebhookModule.forRoot({
+      conf: [
+        [NanoAdapter, nanoConfig, new WebhookRamTransformer()],
+      ],
+      webhookApiPath: "webhooks", // default
+      initialization: async () => { /* optional post-boot logic */ },
+      handlers: [MyRequestHandler], // optional DecafRequestHandler[]
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+This registers:
+- **CRUD controllers** for `WebhookSubscription`, `WebhookEventRecord`, and `WebhookDelivery` (auto-generated via `FromModelController`)
+- **Action endpoints:**
+  - `POST /webhooks/webhook-subscriptions/:id/deactivate` — deactivate a subscription
+  - `POST /webhooks/webhook-subscriptions/:id/reactivate` — reactivate a subscription
+  - `POST /webhooks/webhook-events/:id/replay` — replay all deliveries for an event
+- All routes are prefixed with `webhookApiPath` (default `webhooks`)
+
+### Full Example (Standalone)
+
+```ts
+import {
+  WebhookDeliveryService,
+  WebhookSubscriptionService,
+  WebhookDeliveryMode,
+  WebhookStatus,
+  hook,
+} from "@decaf-ts/for-http/hooks";
+import { AxiosHttpAdapter } from "@decaf-ts/for-http/axios";
+import { NanoAdapter } from "@decaf-ts/for-nano";
+import { RamAdapter, RamFlavour } from "@decaf-ts/core/ram";
+import { Context } from "@decaf-ts/core";
+
+// 1. Define a model with @hook
+@table("products")
+@model()
+@hook([OperationKeys.CREATE, OperationKeys.UPDATE, OperationKeys.DELETE])
+class Product extends Model {
+  @pk() id!: string;
+  @column() name!: string;
+}
+
+// 2. Set up the delivery service
+const deliveryService = new WebhookDeliveryService<NanoAdapter>();
+await deliveryService.initialize({
+  adapter: NanoAdapter,
+  config: nanoConfig,
+  httpAdapter: AxiosHttpAdapter,
+  httpConfig: { protocol: "http", host: "localhost:9090" },
+  mode: WebhookDeliveryMode.POLLING,
+  autoStart: true,
+  models: [Product],
+  flavours: ["nano"],
+  batchSize: 10,
+  pollIntervalMs: 500,
+  gracefulShutdownMsTimeout: 30_000,
+  allowWildcard: true,
+}, ctx);
+
+// 3. Create a subscription
+const subService = new WebhookSubscriptionService();
+await subService.create({
+  topic: "product.*",
+  url: "https://my-app.com/hooks/product",
+  secret: "super-secret",
+}, ctx);
+
+// 4. Create a product — this triggers a webhook event
+const productRepo = Repository.forModel(Product);
+await productRepo.create({ id: "p1", name: "Widget" }, ctx);
+
+// 5. The polling loop picks up the delivery and POSTs to the subscription URL
+//    (happens automatically when autoStart is true)
+
+// 6. Graceful shutdown
+await deliveryService.stop(ctx);
+await deliveryService.shutdown(ctx);
+```
+
 ## Constants and Types (axios)
 ## Constants and Types (axios)
 

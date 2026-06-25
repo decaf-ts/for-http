@@ -127,7 +127,6 @@ export class WebhookDeliveryService<
   }
 
   async stop(...args: MaybeContextualArg<any>) {
-    if (!(await this.isActive())) return;
     const { log, ctx } = (await this.logCtx(args, "hooks-stop", true)).for(
       this.stop
     );
@@ -138,11 +137,29 @@ export class WebhookDeliveryService<
     this.syncing = false;
     await this.stopObserving(ctx);
 
-    while (await this.isRunning()) {
-      log.verbose(`Waiting for current deliveries to finish`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    log.info(`stopped`);
+    const timeout =
+      this._config?.gracefulShutdownMsTimeout ?? 30_000;
+
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        log.error(`Graceful shutdown interrupted after ${timeout} ms`);
+        resolve();
+      }, timeout);
+
+      const check = async () => {
+        while (await this.isRunning()) {
+          log.verbose(`Waiting for current deliveries to finish`);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        clearTimeout(timer);
+        log.info(`stopped`);
+        resolve();
+      };
+      check().catch(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   async start(...args: MaybeContextualArg<any>) {
@@ -254,9 +271,8 @@ export class WebhookDeliveryService<
     let processed: number = 0;
     let unprocessed = due.length;
 
-    const isRunning = await this.isRunning();
     for (const delivery of due) {
-      if (isRunning && this.controller!.signal.aborted) {
+      if (this.controller?.signal.aborted) {
         log.verbose(`batch aborted after ${processed}/${due.length}`);
         break;
       }
@@ -670,9 +686,7 @@ export class WebhookDeliveryService<
     const { ctxArgs } = (
       await this.logCtx(args, PersistenceKeys.SHUTDOWN, true)
     ).for(this.shutdown);
-    if (this._config) {
-      await this.stopObserving(...ctxArgs);
-    }
+    await this.stop(...ctxArgs);
     if (this._client) {
       await this.client.shutdown(...ctxArgs);
     }
