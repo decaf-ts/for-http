@@ -1,37 +1,27 @@
 import { RamTransformer } from "../../src/server";
+import { Context } from "@decaf-ts/core";
 
 describe("server/transformers/RamTransformer", () => {
-  it("maps the authorization header into UUID and preserves headers", async () => {
+  it("maps the context user into UUID", async () => {
     const transformer = new RamTransformer();
-    const result = await transformer.from({
-      headers: {
-        authorization: "Bearer user-123",
-        "x-forwarded-for": "127.0.0.1",
-      },
-    });
+    const ctx = new Context();
+    ctx.accumulate({ user: "user-123" });
+
+    const result = await transformer.from(ctx);
 
     expect(result).toEqual({
       UUID: "user-123",
-      headers: {
-        authorization: "Bearer user-123",
-        "x-forwarded-for": "127.0.0.1",
-      },
       overrides: {},
     });
   });
 
-  it("returns headers and overrides when no authorization is present", async () => {
+  it("returns only overrides when no user is present", async () => {
     const transformer = new RamTransformer();
-    const result = await transformer.from({
-      headers: {
-        "x-real-ip": "127.0.0.1",
-      },
-    });
+    const ctx = new Context();
+
+    const result = await transformer.from(ctx);
 
     expect(result).toEqual({
-      headers: {
-        "x-real-ip": "127.0.0.1",
-      },
       overrides: {},
     });
   });

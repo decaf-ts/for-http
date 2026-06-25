@@ -1,7 +1,7 @@
 import { Metadata, metadata } from "@decaf-ts/decoration";
 
 export abstract class RequestToContextTransformer<C = any> {
-  abstract from(req: any, ...args: any[]): Promise<C>;
+  abstract from(ctx: C, ...args: any[]): Promise<any>;
 }
 
 export function requestToContextTransformer(flavour: string) {

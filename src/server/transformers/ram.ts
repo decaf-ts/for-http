@@ -3,24 +3,22 @@ import {
   requestToContextTransformer,
 } from "./context";
 
+/**
+ * Translates auth-populated context fields into RamAdapter-specific keys.
+ *
+ * Reads `user` from the context (set by the auth handler's `bindToContext`)
+ * and maps it to `UUID` — the key RamAdapter's `@createdBy` / `@updatedBy`
+ * handlers read.
+ */
 export class RamTransformer implements RequestToContextTransformer<any> {
   constructor() {}
 
-  async from(req: any): Promise<any> {
-    const user = req.headers.authorization
-      ? req.headers.authorization.split(" ")[1]
-      : undefined;
+  async from(ctx: any): Promise<any> {
+    const user = ctx.getOrUndefined?.("user");
     if (!user) {
-      return {
-        headers: req?.headers || {},
-        overrides: {},
-      };
+      return { overrides: {} };
     }
-    return {
-      UUID: user,
-      headers: req?.headers || {},
-      overrides: {},
-    };
+    return { UUID: user, overrides: {} };
   }
 }
 
