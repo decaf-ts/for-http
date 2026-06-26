@@ -15,8 +15,15 @@ export type BulkStatementFlags = {
   delete?: boolean;
 };
 
+export interface AuthConfig {
+  public?: boolean;
+  roles?: string[];
+  skipModelRoles?: boolean;
+}
+
 export interface ModelControllerFactoryConfig {
   allowStatementlessQuery?: boolean;
   allowGroupingQueries?: boolean | GroupingQueryFlags;
   allowBulkStatement?: boolean | BulkStatementFlags;
+  auth?: AuthConfig;
 }
