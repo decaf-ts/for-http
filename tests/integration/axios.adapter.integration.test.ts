@@ -96,7 +96,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
   });
 
   test("CRUD methods throw parsed error when client fails", async () => {
-    const boom = new Error("boom");
+    const boom = new InternalError("boom");
     const failingClient = {
       request: async () => {
         throw boom;

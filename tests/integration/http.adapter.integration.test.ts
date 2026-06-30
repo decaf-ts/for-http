@@ -175,7 +175,7 @@ describe("HttpAdapter base features", () => {
   });
 
   test("parseError() should pass through errors as InternalError", () => {
-    const err = new Error("boom");
+    const err = new InternalError("boom");
     const parsed = adapter.parseError(err);
     expect(parsed.message).toBe(`[InternalError][500] ${err.message}`);
   });

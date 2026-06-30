@@ -2,7 +2,7 @@ import { WebhookSignatureMiddleware } from "../../src/server/hooks/middleware";
 import { WebhookSubscription } from "../../src/server/hooks/models/WebhookSubscription";
 import { signWebhookPayload } from "../../src/server/hooks/utils";
 import { WebhookSubscriptionService } from "../../src/server/hooks/SubscriptionService";
-import { ConflictError, NotFoundError } from "@decaf-ts/db-decorators";
+import { ConflictError, InternalError, NotFoundError } from "@decaf-ts/db-decorators";
 import { NanoAdapter } from "@decaf-ts/for-nano";
 import "../../src/server/hooks/overrides";
 
@@ -26,11 +26,11 @@ async function createNanoTestResources(prefix: string) {
     dbProtocol
   );
   await NanoAdapter.createDatabase(connection, dbName).catch((e: any) => {
-    if (!(e instanceof ConflictError)) throw e;
+    if (!(e instanceof ConflictError)) throw new InternalError(String(e));
   });
   await NanoAdapter.createUser(connection, dbName, user, password).catch(
     (e: any) => {
-      if (!(e instanceof ConflictError)) throw e;
+      if (!(e instanceof ConflictError)) throw new InternalError(String(e));
     }
   );
   return {
@@ -48,12 +48,12 @@ async function cleanupNanoTestResources(resources: any) {
   try {
     await NanoAdapter.deleteDatabase(connection, dbName);
   } catch (e: any) {
-    if (!(e instanceof NotFoundError)) throw e;
+    if (!(e instanceof NotFoundError)) throw new InternalError(String(e));
   }
   try {
     await NanoAdapter.deleteUser(connection, dbName, user);
   } catch (e: any) {
-    if (!(e instanceof NotFoundError)) throw e;
+    if (!(e instanceof NotFoundError)) throw new InternalError(String(e));
   } finally {
     NanoAdapter.closeConnection(connection);
   }

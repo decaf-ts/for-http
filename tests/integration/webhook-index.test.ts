@@ -3,6 +3,7 @@ import { WebhookStatus } from "../../src/server/hooks/constants";
 import { NanoAdapter } from "@decaf-ts/for-nano";
 import { WebhookDelivery } from "../../src/server/hooks";
 import "../../src/server/hooks/overrides";
+import { InternalError } from "@decaf-ts/db-decorators";
 
 async function createNanoTestResources() {
   const adminUser = process.env.NANO_ADMIN_USER || "couchdb.admin";
@@ -26,7 +27,7 @@ async function createNanoTestResources() {
       !(e instanceof Error) ||
       ((e as any).error !== "file_exists" && (e as any).statusCode !== 409)
     ) {
-      throw e;
+      throw new InternalError(String(e));
     }
   });
   await NanoAdapter.createUser(connection, dbName, user, password).catch(
@@ -35,7 +36,7 @@ async function createNanoTestResources() {
         !(e instanceof Error) ||
         ((e as any).error !== "file_exists" && (e as any).statusCode !== 409)
       ) {
-        throw e;
+        throw new InternalError(String(e));
       }
     }
   );

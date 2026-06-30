@@ -1,4 +1,11 @@
-import { BaseModel, column, pk, query, table } from "@decaf-ts/core";
+import {
+  BaseModel,
+  column,
+  pk,
+  query,
+  table,
+  UnsupportedError,
+} from "@decaf-ts/core";
 import { model } from "@decaf-ts/decorator-validation";
 import { ModelControllerBuilder } from "../../src/server/controllers/ModelControllerBuilder";
 import { BlockOperations, OperationKeys, composed } from "@decaf-ts/db-decorators";
@@ -44,7 +51,7 @@ class QueryProductRepository extends Repository<QueryProduct, any> {
 
   @query()
   findByName(name: string): Promise<QueryProduct[]> {
-    throw new Error(`Method not implemented: ${name}`);
+    throw new UnsupportedError(`Method not implemented: ${name}`);
   }
 }
 

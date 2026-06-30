@@ -3,6 +3,7 @@ import { Metadata } from "@decaf-ts/decoration";
 import {
   BulkCrudOperationKeys,
   DBKeys,
+  InternalError,
   OperationKeys,
 } from "@decaf-ts/db-decorators";
 import {
@@ -13,6 +14,7 @@ import {
   Repo,
   Repository,
   Service,
+  UnsupportedError,
 } from "@decaf-ts/core";
 import { ServerControllerBuilder } from "./ControllerBuilder";
 import { ServerMethodBuilder } from "./RouteBuilder";
@@ -30,6 +32,22 @@ type RouteMetadata = Record<
 >;
 
 type QueryMetadata = Record<string, { fields?: string[] | undefined }>;
+
+function allowsRawStatements(persistence: any): boolean {
+  const candidates = [
+    persistence,
+    persistence?.repo,
+    persistence?.repo?._adapter,
+    persistence?._adapter,
+  ];
+
+  for (const candidate of candidates) {
+    const allowed = candidate?._overrides?.allowRawStatements;
+    if (typeof allowed === "boolean") return allowed;
+  }
+
+  return true;
+}
 
 function getPersistenceFallback<T extends Model<boolean>>(
   ModelConstr: ModelConstructor<T>
@@ -89,26 +107,98 @@ function resolvePersistenceTarget<T extends Model<boolean>>(
   return getPersistenceFallback(ModelConstr);
 }
 
-function invokePersistenceMethod(
+function invokeDirectPersistenceMethod(
   persistence: any,
   methodName: string,
   args: any[]
 ) {
   if (!persistence) {
-    throw new Error(`No persistence available for method "${methodName}"`);
+    throw new InternalError(`No persistence available for method "${methodName}"`);
   }
 
   if (typeof persistence[methodName] === "function") {
     return persistence[methodName](...args);
   }
 
+  if (persistence?.repo && typeof persistence.repo[methodName] === "function") {
+    return persistence.repo[methodName](...args);
+  }
+
+  throw new InternalError(
+    `Persistence method "${methodName}" not found on ${persistence?.constructor?.name ?? "unknown persistence"}`
+  );
+}
+
+function invokeRepositoryPersistenceMethod(
+  persistence: any,
+  methodName: string,
+  args: any[]
+) {
+  if (!persistence) {
+    throw new InternalError(`No persistence available for method "${methodName}"`);
+  }
+
+  if (persistence?.repo && typeof persistence.repo[methodName] === "function") {
+    return persistence.repo[methodName](...args);
+  }
+
+  if (typeof persistence[methodName] === "function") {
+    return persistence[methodName](...args);
+  }
+
+  throw new InternalError(
+    `Persistence method "${methodName}" not found on ${persistence?.constructor?.name ?? "unknown persistence"}`
+  );
+}
+
+function invokeStatementPersistenceMethod(
+  persistence: any,
+  methodName: string,
+  args: any[]
+) {
+  if (!allowsRawStatements(persistence)) {
+    throw new UnsupportedError(
+      `Raw statements are not allowed in the current configuration`
+    );
+  }
+
+  if (!persistence) {
+    throw new InternalError(`No persistence available for method "${methodName}"`);
+  }
+
   if (typeof persistence.statement === "function") {
     return persistence.statement(methodName, ...args);
   }
 
-  throw new Error(
+  throw new InternalError(
     `Persistence method "${methodName}" not found on ${persistence?.constructor?.name ?? "unknown persistence"}`
   );
+}
+
+function normalizeQueryArgs(args: any[]): any[] {
+  if (args.length === 0) return args;
+
+  const normalized = [...args];
+  const last = normalized[normalized.length - 1];
+  if (!last || typeof last !== "object" || Array.isArray(last)) {
+    return normalized;
+  }
+
+  const queryObj = last as Record<string, any>;
+  const hasQueryFields =
+    queryObj.direction !== undefined ||
+    queryObj.limit !== undefined ||
+    queryObj.offset !== undefined ||
+    queryObj.bookmark !== undefined;
+
+  if (!hasQueryFields) return normalized;
+
+  normalized.pop();
+  if (queryObj.direction !== undefined) normalized.push(queryObj.direction);
+  if (queryObj.limit !== undefined) normalized.push(queryObj.limit);
+  if (queryObj.offset !== undefined) normalized.push(queryObj.offset);
+  if (queryObj.bookmark !== undefined) normalized.push(queryObj.bookmark);
+  return normalized;
 }
 
 function modelRouteParameters<T extends Model<boolean>>(
@@ -166,7 +256,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withPath("")
         .withImplementation(function create(this: any, data: T) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "create", [data, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "create", [data, this?.ctx]);
         })
         .build()
     );
@@ -187,7 +277,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withImplementation(function read(this: any, ...routeParams: Array<string | number>) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
           const id = getPK(...routeParams);
-          return invokePersistenceMethod(persistence, "read", [id, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "read", [id, this?.ctx]);
         })
         .build()
     );
@@ -217,7 +307,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             ...(plainBody as any),
             [pkName]: id,
           });
-          return invokePersistenceMethod(persistence, "update", [payload, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "update", [payload, this?.ctx]);
         })
         .build()
     );
@@ -241,7 +331,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         ) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
           const id = getPK(...routeParams);
-          return invokePersistenceMethod(persistence, "delete", [id, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "delete", [id, this?.ctx]);
         })
         .build()
     );
@@ -260,7 +350,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withPath("bulk")
         .withImplementation(function createAll(this: any, data: T[]) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "createAll", [data, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "createAll", [data, this?.ctx]);
         })
         .build()
     );
@@ -279,7 +369,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withPath("bulk")
         .withImplementation(function readAll(this: any, ids: string[]) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "readAll", [ids, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "readAll", [ids, this?.ctx]);
         })
         .build()
     );
@@ -298,7 +388,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withPath("bulk")
         .withImplementation(function updateAll(this: any, data: T[]) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "updateAll", [data, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "updateAll", [data, this?.ctx]);
         })
         .build()
     );
@@ -317,7 +407,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withPath("bulk")
         .withImplementation(function deleteAll(this: any, ids: string[]) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "deleteAll", [ids, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "deleteAll", [ids, this?.ctx]);
         })
         .build()
     );
@@ -325,6 +415,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addStatementRoute(): this {
+    if (!allowsRawStatements(this.persistence)) return this;
     if (isOperationBlocked(this.ModelConstr, "statement", PersistenceKeys.STATEMENT))
       return this;
     const ModelConstr = this.ModelConstr;
@@ -386,7 +477,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
               break;
           }
 
-          return invokePersistenceMethod(persistence, "statement", [method, ...args, this?.ctx]);
+          return invokeStatementPersistenceMethod(persistence, "statement", [method, ...args, this?.ctx]);
         })
         .build()
     );
@@ -409,7 +500,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           details: { direction?: string } = {}
         ) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "listBy", [
+          return invokeDirectPersistenceMethod(persistence, "listBy", [
             key,
             details.direction,
             this?.ctx,
@@ -437,7 +528,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           details: { direction?: string; limit?: number; offset?: number } = {}
         ) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "paginateBy", [
+          return invokeDirectPersistenceMethod(persistence, "paginateBy", [
             key,
             details.direction,
             { limit: details.limit, offset: details.offset, page },
@@ -465,7 +556,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           details: { direction?: string } = {}
         ) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "find", [
+          return invokeDirectPersistenceMethod(persistence, "find", [
             value,
             details.direction,
             this?.ctx,
@@ -502,7 +593,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             limit: details.limit ?? 10,
             bookmark: details.bookmark,
           };
-          return invokePersistenceMethod(persistence, "page", [
+          return invokeDirectPersistenceMethod(persistence, "page", [
             value,
             details.direction ?? "ASC",
             ref,
@@ -536,7 +627,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           value: any
         ) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokePersistenceMethod(persistence, "findOneBy", [
+          return invokeDirectPersistenceMethod(persistence, "findOneBy", [
             key,
             value,
             this?.ctx,
@@ -560,7 +651,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withImplementation(function findBy(this: any, key: string, value: any) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
           const target = persistence.for?.(this?.ctx?.toOverrides?.()) ?? persistence;
-          return invokePersistenceMethod(target, "findBy", [key, value, this?.ctx]);
+          return invokeDirectPersistenceMethod(target, "findBy", [key, value, this?.ctx]);
         })
         .build()
     );
@@ -607,7 +698,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           .withPath(path)
           .withImplementation(function grouping(this: any, field: string) {
             const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-            return invokePersistenceMethod(persistence, "statement", [
+            return invokeStatementPersistenceMethod(persistence, "statement", [
               statementKey,
               field,
               this?.ctx,
@@ -641,7 +732,8 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withPath(path)
         .withImplementation(function complexQuery(this: any, ...args: any[]) {
           const target = resolvePersistenceTarget(ModelConstr, this, persistence);
-          return invokePersistenceMethod(target, methodName, args);
+          const normalizedArgs = normalizeQueryArgs(args);
+          return invokeRepositoryPersistenceMethod(target, methodName, normalizedArgs);
         })
         .build()
     );
@@ -665,7 +757,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           .withPath(params.path.replace(/^\/+|\/+$/g, ""))
           .withImplementation(function routedMethod(this: any, ...args: any[]) {
             const target = resolvePersistenceTarget(ModelConstr, this, source);
-            return invokePersistenceMethod(target, methodName, args);
+            return invokeRepositoryPersistenceMethod(target, methodName, args);
           })
           .build()
       );

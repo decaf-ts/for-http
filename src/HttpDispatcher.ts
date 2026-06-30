@@ -61,7 +61,7 @@ export class HttpDispatcher extends Dispatch<
           hasAdapter: !!this.adapter,
         }
       );
-      throw new Error("Cannot start listening before call initialize()");
+      throw new InternalError("Cannot start listening before call initialize()");
     }
 
     const conf = this.adapter.config as HttpConfig;
@@ -84,7 +84,7 @@ export class HttpDispatcher extends Dispatch<
         protocol,
         host,
       });
-      throw new Error("No eventsListenerPath specified");
+      throw new InternalError("No eventsListenerPath specified");
     }
 
     const listeningUrl = new URL(

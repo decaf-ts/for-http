@@ -3,6 +3,7 @@ import { EventSourcePlus } from "event-source-plus";
 import { Serialization } from "@decaf-ts/decorator-validation";
 import { Context, ContextualLoggedClass } from "@decaf-ts/core";
 import { Lock } from "@decaf-ts/transactional-decorators";
+import { InternalError } from "@decaf-ts/db-decorators";
 
 export type ServerEventConnectorHeaders =
   | Record<string, string>
@@ -14,7 +15,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
   static get(url: string): ServerEventConnector {
     if (this.cache.has(url)) return this.cache.get(url) as ServerEventConnector;
 
-    throw new Error(
+    throw new InternalError(
       `Server event connector not found for URL '${url}'. Did you forget to call open()?`
     );
   }
@@ -240,7 +241,7 @@ export class ServerEventConnector extends ContextualLoggedClass<Context<any>> {
             status,
             statusText,
           });
-          const err = new Error(
+          const err = new InternalError(
             `HTTP ${status ?? "unknown"} ${statusText ?? "error"}`
           );
           void self.setReady(false);

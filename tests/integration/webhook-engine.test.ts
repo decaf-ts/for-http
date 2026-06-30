@@ -41,6 +41,7 @@ import {
 import { signWebhookPayload } from "../../src/server/hooks/utils";
 import { Constructor, uses } from "@decaf-ts/decoration";
 import { OperationKeys } from "@decaf-ts/db-decorators";
+import { InternalError } from "@decaf-ts/db-decorators";
 
 NanoAdapter.decoration();
 Model.setBuilder(Model.fromModel);
@@ -61,7 +62,7 @@ async function waitFor<T>(
     if (result) return result;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new Error(`Timed out after ${timeoutMs}ms waiting for condition`);
+  throw new InternalError(`Timed out after ${timeoutMs}ms waiting for condition`);
 }
 
 async function createNanoTestResources() {
@@ -83,13 +84,13 @@ async function createNanoTestResources() {
 
   await NanoAdapter.createDatabase(connection, dbName).catch((e: any) => {
     if (!(e instanceof Error) || (e as any).error !== "file_exists") {
-      throw e;
+      throw new InternalError(String(e));
     }
   });
   await NanoAdapter.createUser(connection, dbName, user, password).catch(
     (e: any) => {
       if (!(e instanceof Error) || (e as any).error !== "file_exists") {
-        throw e;
+        throw new InternalError(String(e));
       }
     }
   );
@@ -109,12 +110,12 @@ async function cleanupNanoTestResources(resources: any) {
   try {
     await NanoAdapter.deleteDatabase(connection, dbName);
   } catch (e: any) {
-    if (!(e instanceof Error)) throw e;
+    if (!(e instanceof Error)) throw new InternalError(String(e));
   }
   try {
     await NanoAdapter.deleteUser(connection, dbName, user);
   } catch (e: any) {
-    if (!(e instanceof Error)) throw e;
+    if (!(e instanceof Error)) throw new InternalError(String(e));
   } finally {
     NanoAdapter.closeConnection(connection);
   }

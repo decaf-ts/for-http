@@ -1,6 +1,6 @@
 import { BaseModel, column, pk, query, route, table } from "@decaf-ts/core";
 import { model, required, type ModelArg } from "@decaf-ts/decorator-validation";
-import { composed } from "@decaf-ts/db-decorators";
+import { composed, InternalError } from "@decaf-ts/db-decorators";
 import { ModelControllerBuilder } from "../../src/server/controllers/ModelControllerBuilder";
 import { ModelControllerFactory } from "../../src/server/controllers/ModelControllerFactory";
 import { Product } from "./models/Product";
@@ -208,6 +208,85 @@ describe("server/controllers/ModelControllerFactory", () => {
     expect(routes).not.toContainEqual({ method: "GET", path: "countOf/:field" });
     expect(routes).toEqual(
       expect.arrayContaining([{ method: "GET", path: "groupOf/:field" }])
+    );
+  });
+
+  it("does not register raw statement routes when persistence disables them", () => {
+    const persistence = {
+      class: FactoryQueryModel,
+      _overrides: {
+        allowRawStatements: false,
+      },
+      create() {
+        return undefined;
+      },
+      read() {
+        return undefined;
+      },
+      update() {
+        return undefined;
+      },
+      delete() {
+        return undefined;
+      },
+      createAll() {
+        return undefined;
+      },
+      readAll() {
+        return undefined;
+      },
+      updateAll() {
+        return undefined;
+      },
+      deleteAll() {
+        return undefined;
+      },
+      listBy() {
+        return undefined;
+      },
+      paginateBy() {
+        return undefined;
+      },
+      find() {
+        return undefined;
+      },
+      page() {
+        return undefined;
+      },
+      findOneBy() {
+        return undefined;
+      },
+      findBy() {
+        return undefined;
+      },
+    } as any;
+
+    const factoryClass = ModelControllerFactory.create(
+      FactoryQueryModel,
+      persistence
+    );
+    const routes = routesOf(factoryClass);
+
+    expect(routes).not.toContainEqual({
+      method: "GET",
+      path: "statement/:method/*args",
+    });
+  });
+
+  it("fails closed instead of falling back to the raw statement API for direct routes", () => {
+    const persistence = {
+      class: FactoryQueryModel,
+      statement() {
+        return "statement";
+      },
+    } as any;
+
+    const builder = new ModelControllerBuilder(FactoryQueryModel, persistence);
+    const Controller = builder.addCreateRoute().build() as any;
+    const route = Controller.__routes__[0];
+
+    expect(() => route.implementation.call({ ctx: {} }, {})).toThrow(
+      InternalError
     );
   });
 });
