@@ -29,7 +29,9 @@ function composedRoutePaths<T extends Model<boolean>>(
 ): string[] {
   const pk = Model.pk(ModelConstr) as keyof Model<any>;
   const composed = Metadata.get(ModelConstr, Metadata.key(DBKeys.COMPOSED, pk));
-  const args: string[] = composed?.args?.length ? Array.from(new Set(composed.args)) : [pk as string];
+  const args: string[] = composed?.args?.length
+    ? Array.from(new Set(composed.args))
+    : [pk as string];
 
   if (!composed?.filterEmpty) {
     return [`:${args.join("/:")}`];
@@ -42,26 +44,30 @@ function composedRoutePaths<T extends Model<boolean>>(
         ? composed.filterEmpty.includes(name)
         : false;
 
-  const routes: string[] = [];
-  for (let end = args.length; end >= 1; end -= 1) {
-    const omitted = args.slice(end);
-    if (omitted.every(canOmit)) {
-      routes.push(`:${args.slice(0, end).join("/:")}`);
+  const routes = new Set<string>();
+
+  const walk = (index: number, current: string[]) => {
+    if (index >= args.length) {
+      if (current.length > 0) {
+        routes.add(`:${current.join("/:")}`);
+      }
+      return;
     }
-  }
 
-  // Also generate a route with ALL filterEmpty fields removed (not just
-  // trailing ones). This handles the case where filterEmpty fields are in
-  // the middle of the composed PK (e.g. Leaflet's filterEmpty=["batchNumber",
-  // "epiMarket"] where batchNumber is the 2nd of 5 args). The trailing-removal
-  // loop above can only omit fields from the end, so we add this route to
-  // cover the case where all filterEmpty fields are empty at once.
-  const nonFilterEmpty = args.filter((a) => !canOmit(a));
-  if (nonFilterEmpty.length > 0 && nonFilterEmpty.length < args.length) {
-    routes.push(`:${nonFilterEmpty.join("/:")}`);
-  }
+    const segment = args[index];
+    const optional = canOmit(segment);
 
-  return Array.from(new Set(routes));
+    current.push(segment);
+    walk(index + 1, current);
+    current.pop();
+
+    if (optional) {
+      walk(index + 1, current);
+    }
+  };
+
+  walk(0, []);
+  return [...routes];
 }
 
 export class ModelControllerFactory {

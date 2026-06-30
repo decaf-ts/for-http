@@ -1,5 +1,6 @@
 import { BaseModel, column, pk, query, route, table } from "@decaf-ts/core";
 import { model, required, type ModelArg } from "@decaf-ts/decorator-validation";
+import { composed } from "@decaf-ts/db-decorators";
 import { ModelControllerBuilder } from "../../src/server/controllers/ModelControllerBuilder";
 import { ModelControllerFactory } from "../../src/server/controllers/ModelControllerFactory";
 import { Product } from "./models/Product";
@@ -16,6 +17,28 @@ class FactoryQueryModel extends BaseModel {
   name!: string;
 
   constructor(arg?: ModelArg<FactoryQueryModel>) {
+    super(arg);
+  }
+}
+
+@table("factory_composed_model")
+@model()
+class FactoryComposedModel extends BaseModel {
+  @pk()
+  @composed(["code", "batchNumber", "locale"], ":", ["batchNumber", "locale"])
+  id!: string;
+
+  @required()
+  @column()
+  code!: string;
+
+  @column()
+  batchNumber?: string;
+
+  @column()
+  locale?: string;
+
+  constructor(arg?: ModelArg<FactoryComposedModel>) {
     super(arg);
   }
 }
@@ -153,6 +176,24 @@ describe("server/controllers/ModelControllerFactory", () => {
         { method: "DELETE", path: ":productCode/:marketId" },
       ])
     );
+  });
+
+  it("adds every legal composed-key fallback route when filterEmpty omits middle segments", () => {
+    const factoryClass = ModelControllerFactory.create(FactoryComposedModel);
+    const routes = routesOf(factoryClass);
+    const hasRoute = (method: string, path: string) =>
+      routes.some((route) => route.method === method && route.path === path);
+
+    for (const path of [
+      ":code/:batchNumber/:locale",
+      ":code/:batchNumber",
+      ":code/:locale",
+      ":code",
+    ]) {
+      expect(hasRoute("GET", path)).toBe(true);
+      expect(hasRoute("PUT", path)).toBe(true);
+      expect(hasRoute("DELETE", path)).toBe(true);
+    }
   });
 
   it("respects granular grouping config objects", () => {

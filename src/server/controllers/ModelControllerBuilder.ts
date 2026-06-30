@@ -212,8 +212,9 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         ) {
           const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
           const id = getPK(...routeParams);
+          const plainBody = JSON.parse(JSON.stringify(body));
           const payload = new ModelConstr({
-            ...(body as any),
+            ...(plainBody as any),
             [pkName]: id,
           });
           return invokePersistenceMethod(persistence, "update", [payload, this?.ctx]);
