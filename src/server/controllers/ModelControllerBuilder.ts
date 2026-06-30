@@ -70,16 +70,14 @@ function metadataSource(value: any): any {
 
 function readRouteMetadata(value: any): RouteMetadata {
   const source = metadataSource(value);
-  return (
-    Metadata.get(source, Metadata.key(PersistenceKeys.DECAF_ROUTE)) ?? {}
-  ) as RouteMetadata;
+  return (Metadata.get(source, Metadata.key(PersistenceKeys.DECAF_ROUTE)) ??
+    {}) as RouteMetadata;
 }
 
 function readQueryMetadata(value: any): QueryMetadata {
   const source = metadataSource(value);
-  return (
-    Metadata.get(source, Metadata.key(PersistenceKeys.QUERY)) ?? {}
-  ) as QueryMetadata;
+  return (Metadata.get(source, Metadata.key(PersistenceKeys.QUERY)) ??
+    {}) as QueryMetadata;
 }
 
 function resolvePersistenceTarget<T extends Model<boolean>>(
@@ -113,7 +111,9 @@ function invokeDirectPersistenceMethod(
   args: any[]
 ) {
   if (!persistence) {
-    throw new InternalError(`No persistence available for method "${methodName}"`);
+    throw new InternalError(
+      `No persistence available for method "${methodName}"`
+    );
   }
 
   if (typeof persistence[methodName] === "function") {
@@ -122,28 +122,6 @@ function invokeDirectPersistenceMethod(
 
   if (persistence?.repo && typeof persistence.repo[methodName] === "function") {
     return persistence.repo[methodName](...args);
-  }
-
-  throw new InternalError(
-    `Persistence method "${methodName}" not found on ${persistence?.constructor?.name ?? "unknown persistence"}`
-  );
-}
-
-function invokeRepositoryPersistenceMethod(
-  persistence: any,
-  methodName: string,
-  args: any[]
-) {
-  if (!persistence) {
-    throw new InternalError(`No persistence available for method "${methodName}"`);
-  }
-
-  if (persistence?.repo && typeof persistence.repo[methodName] === "function") {
-    return persistence.repo[methodName](...args);
-  }
-
-  if (typeof persistence[methodName] === "function") {
-    return persistence[methodName](...args);
   }
 
   throw new InternalError(
@@ -163,7 +141,9 @@ function invokeStatementPersistenceMethod(
   }
 
   if (!persistence) {
-    throw new InternalError(`No persistence available for method "${methodName}"`);
+    throw new InternalError(
+      `No persistence available for method "${methodName}"`
+    );
   }
 
   if (typeof persistence.statement === "function") {
@@ -175,10 +155,63 @@ function invokeStatementPersistenceMethod(
   );
 }
 
-function normalizeQueryArgs(args: any[]): any[] {
-  if (args.length === 0) return args;
+function invokeQueryPersistenceMethod(
+  persistence: any,
+  methodName: string,
+  args: any[]
+) {
+  if (!persistence) {
+    throw new InternalError(
+      `No persistence available for method "${methodName}"`
+    );
+  }
 
-  const normalized = [...args];
+  if (persistence?.repo && typeof persistence.repo[methodName] === "function") {
+    return persistence.repo[methodName](...args);
+  }
+
+  if (typeof persistence[methodName] === "function") {
+    return persistence[methodName](...args);
+  }
+
+  if (typeof persistence.query === "function") {
+    return persistence.query(methodName, ...args);
+  }
+
+  if (typeof persistence.statement === "function") {
+    return persistence.statement(methodName, ...args);
+  }
+
+  throw new InternalError(
+    `Persistence method "${methodName}" not found on ${persistence?.constructor?.name ?? "unknown persistence"}`
+  );
+}
+
+function extractQueryArgs(args: any[]): any[] {
+  if (args.length === 0) return args;
+  const last = args[args.length - 1];
+  if (last && typeof last === "object" && !Array.isArray(last)) {
+    const queryObj = args.pop() as Record<string, any>;
+    const hasDirection = queryObj.direction !== undefined;
+    const hasLimit = queryObj.limit !== undefined;
+    const hasOffset = queryObj.offset !== undefined;
+    const hasBookmark = queryObj.bookmark !== undefined;
+    if (!hasDirection && !hasLimit && !hasOffset && !hasBookmark) return args;
+    const extras: any[] = [];
+    if (hasDirection) extras.push(queryObj.direction);
+    else if (hasLimit || hasOffset || hasBookmark) extras.push(undefined);
+    if (hasLimit) extras.push(queryObj.limit);
+    if (hasOffset) extras.push(queryObj.offset);
+    if (hasBookmark) extras.push(queryObj.bookmark);
+    return [...args, ...extras];
+  }
+  return args;
+}
+
+function normalizeQueryArgs(args: any[]): any[] {
+  const normalized = extractQueryArgs([...args]);
+  if (normalized.length === 0) return normalized;
+
   const last = normalized[normalized.length - 1];
   if (!last || typeof last !== "object" || Array.isArray(last)) {
     return normalized;
@@ -191,7 +224,10 @@ function normalizeQueryArgs(args: any[]): any[] {
     queryObj.offset !== undefined ||
     queryObj.bookmark !== undefined;
 
-  if (!hasQueryFields) return normalized;
+  if (!hasQueryFields) {
+    normalized.pop();
+    return normalized;
+  }
 
   normalized.pop();
   if (queryObj.direction !== undefined) normalized.push(queryObj.direction);
@@ -255,8 +291,15 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withMethod("POST")
         .withPath("")
         .withImplementation(function create(this: any, data: T) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokeDirectPersistenceMethod(persistence, "create", [data, this?.ctx]);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
+          return invokeDirectPersistenceMethod(persistence, "create", [
+            data,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -274,10 +317,20 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
       new ServerMethodBuilder()
         .withMethod("GET")
         .withPath(routePath)
-        .withImplementation(function read(this: any, ...routeParams: Array<string | number>) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+        .withImplementation(function read(
+          this: any,
+          ...routeParams: Array<string | number>
+        ) {
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           const id = getPK(...routeParams);
-          return invokeDirectPersistenceMethod(persistence, "read", [id, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "read", [
+            id,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -300,14 +353,21 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           body: T,
           ...routeParams: Array<string | number>
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           const id = getPK(...routeParams);
           const plainBody = JSON.parse(JSON.stringify(body));
           const payload = new ModelConstr({
             ...(plainBody as any),
             [pkName]: id,
           });
-          return invokeDirectPersistenceMethod(persistence, "update", [payload, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "update", [
+            payload,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -329,9 +389,16 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           this: any,
           ...routeParams: Array<string | number>
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           const id = getPK(...routeParams);
-          return invokeDirectPersistenceMethod(persistence, "delete", [id, this?.ctx]);
+          return invokeDirectPersistenceMethod(persistence, "delete", [
+            id,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -339,7 +406,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addBulkCreateRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "bulk", BulkCrudOperationKeys.CREATE_ALL))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "bulk",
+        BulkCrudOperationKeys.CREATE_ALL
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -349,8 +422,15 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withMethod("POST")
         .withPath("bulk")
         .withImplementation(function createAll(this: any, data: T[]) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokeDirectPersistenceMethod(persistence, "createAll", [data, this?.ctx]);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
+          return invokeDirectPersistenceMethod(persistence, "createAll", [
+            data,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -358,7 +438,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addBulkReadRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "bulk", BulkCrudOperationKeys.READ_ALL))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "bulk",
+        BulkCrudOperationKeys.READ_ALL
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -368,8 +454,15 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withMethod("GET")
         .withPath("bulk")
         .withImplementation(function readAll(this: any, ids: string[]) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokeDirectPersistenceMethod(persistence, "readAll", [ids, this?.ctx]);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
+          return invokeDirectPersistenceMethod(persistence, "readAll", [
+            ids,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -377,7 +470,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addBulkUpdateRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "bulk", BulkCrudOperationKeys.UPDATE_ALL))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "bulk",
+        BulkCrudOperationKeys.UPDATE_ALL
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -387,8 +486,15 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withMethod("PUT")
         .withPath("bulk")
         .withImplementation(function updateAll(this: any, data: T[]) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokeDirectPersistenceMethod(persistence, "updateAll", [data, this?.ctx]);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
+          return invokeDirectPersistenceMethod(persistence, "updateAll", [
+            data,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -396,7 +502,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addBulkDeleteRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "bulk", BulkCrudOperationKeys.DELETE_ALL))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "bulk",
+        BulkCrudOperationKeys.DELETE_ALL
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -406,8 +518,15 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withMethod("DELETE")
         .withPath("bulk")
         .withImplementation(function deleteAll(this: any, ids: string[]) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          return invokeDirectPersistenceMethod(persistence, "deleteAll", [ids, this?.ctx]);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
+          return invokeDirectPersistenceMethod(persistence, "deleteAll", [
+            ids,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -416,7 +535,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
 
   addStatementRoute(): this {
     if (!allowsRawStatements(this.persistence)) return this;
-    if (isOperationBlocked(this.ModelConstr, "statement", PersistenceKeys.STATEMENT))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "statement",
+        PersistenceKeys.STATEMENT
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -436,9 +561,17 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             bookmark?: any;
           } = {}
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           args = args.map((arg) =>
-            typeof arg === "string" ? (Number.isNaN(Number(arg)) ? arg : Number(arg)) : arg
+            typeof arg === "string"
+              ? Number.isNaN(Number(arg))
+                ? arg
+                : Number(arg)
+              : arg
           );
           const pathDirection = args.length > 1 ? args[1] : undefined;
           const resolvedDirection = (details.direction ?? pathDirection) as
@@ -448,36 +581,90 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
 
           switch (method) {
             case PreparedStatementKeys.FIND:
-            case PreparedStatementKeys.FIND_BY:
-              break;
+              return invokeDirectPersistenceMethod(persistence, "find", [
+                args[0],
+                resolvedDirection ?? "ASC",
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.LIST_BY:
               args.push(details.direction as string);
-              break;
+              return invokeDirectPersistenceMethod(persistence, "listBy", [
+                args[0],
+                args[1],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.PAGE:
             case PreparedStatementKeys.PAGE_BY:
-              args = [
+              return invokeDirectPersistenceMethod(
+                persistence,
+                method === PreparedStatementKeys.PAGE ? "page" : "paginateBy",
+                [
+                  args[0],
+                  resolvedDirection as any,
+                  {
+                    limit: details.limit,
+                    offset: details.offset,
+                    bookmark: details.bookmark,
+                    ...(method === PreparedStatementKeys.PAGE_BY
+                      ? { page: args[1] }
+                      : {}),
+                  },
+                  this?.ctx,
+                ]
+              );
+            case PreparedStatementKeys.FIND_BY:
+              return invokeDirectPersistenceMethod(persistence, "findBy", [
                 args[0],
-                resolvedDirection as any,
-                {
-                  limit: details.limit,
-                  offset: details.offset,
-                  bookmark: details.bookmark,
-                },
-              ];
-              break;
+                args[1],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.FIND_ONE_BY:
-              break;
+              return invokeDirectPersistenceMethod(persistence, "findOneBy", [
+                args[0],
+                args[1],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.COUNT_OF:
+              return invokeDirectPersistenceMethod(persistence, "countOf", [
+                args[0],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.MAX_OF:
+              return invokeDirectPersistenceMethod(persistence, "maxOf", [
+                args[0],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.MIN_OF:
+              return invokeDirectPersistenceMethod(persistence, "minOf", [
+                args[0],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.AVG_OF:
+              return invokeDirectPersistenceMethod(persistence, "avgOf", [
+                args[0],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.SUM_OF:
+              return invokeDirectPersistenceMethod(persistence, "sumOf", [
+                args[0],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.DISTINCT_OF:
+              return invokeDirectPersistenceMethod(persistence, "distinctOf", [
+                args[0],
+                this?.ctx,
+              ]);
             case PreparedStatementKeys.GROUP_OF:
-              break;
+              return invokeDirectPersistenceMethod(persistence, "groupOf", [
+                args[0],
+                this?.ctx,
+              ]);
           }
 
-          return invokeStatementPersistenceMethod(persistence, "statement", [method, ...args, this?.ctx]);
+          return invokeStatementPersistenceMethod(persistence, method, [
+            ...args,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -485,7 +672,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addListByRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "statement", PreparedStatementKeys.LIST_BY))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "statement",
+        PreparedStatementKeys.LIST_BY
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -499,7 +692,11 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           key: string,
           details: { direction?: string } = {}
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           return invokeDirectPersistenceMethod(persistence, "listBy", [
             key,
             details.direction,
@@ -512,7 +709,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addPaginateByRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "statement", PreparedStatementKeys.PAGE_BY))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "statement",
+        PreparedStatementKeys.PAGE_BY
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -527,7 +730,11 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           page: string,
           details: { direction?: string; limit?: number; offset?: number } = {}
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           return invokeDirectPersistenceMethod(persistence, "paginateBy", [
             key,
             details.direction,
@@ -541,7 +748,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addFindRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "statement", PreparedStatementKeys.FIND))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "statement",
+        PreparedStatementKeys.FIND
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -555,7 +768,11 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           value: string,
           details: { direction?: string } = {}
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           return invokeDirectPersistenceMethod(persistence, "find", [
             value,
             details.direction,
@@ -568,7 +785,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addPageRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "statement", PreparedStatementKeys.PAGE))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "statement",
+        PreparedStatementKeys.PAGE
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -587,7 +810,11 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             bookmark?: any;
           } = {}
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           const ref = {
             offset: details.offset ?? 1,
             limit: details.limit ?? 10,
@@ -626,7 +853,11 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           key: string,
           value: any
         ) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
           return invokeDirectPersistenceMethod(persistence, "findOneBy", [
             key,
             value,
@@ -639,7 +870,13 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addFindByRoute(): this {
-    if (isOperationBlocked(this.ModelConstr, "statement", PreparedStatementKeys.FIND_BY))
+    if (
+      isOperationBlocked(
+        this.ModelConstr,
+        "statement",
+        PreparedStatementKeys.FIND_BY
+      )
+    )
       return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
@@ -648,10 +885,23 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
       new ServerMethodBuilder()
         .withMethod("GET")
         .withPath("findBy/:key/:value")
-        .withImplementation(function findBy(this: any, key: string, value: any) {
-          const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-          const target = persistence.for?.(this?.ctx?.toOverrides?.()) ?? persistence;
-          return invokeDirectPersistenceMethod(target, "findBy", [key, value, this?.ctx]);
+        .withImplementation(function findBy(
+          this: any,
+          key: string,
+          value: any
+        ) {
+          const persistence = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            fallback
+          );
+          const target =
+            persistence.for?.(this?.ctx?.toOverrides?.()) ?? persistence;
+          return invokeDirectPersistenceMethod(target, "findBy", [
+            key,
+            value,
+            this?.ctx,
+          ]);
         })
         .build()
     );
@@ -662,7 +912,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
     const allow = (key: keyof GroupingQueryFlags) =>
-      typeof selection === "boolean" ? selection : selection?.[key] ?? true;
+      typeof selection === "boolean" ? selection : (selection?.[key] ?? true);
     const routes: Array<[string, string]> = [
       [PreparedStatementKeys.COUNT_OF, "countOf/:field"],
       [PreparedStatementKeys.MAX_OF, "maxOf/:field"],
@@ -697,9 +947,12 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           .withMethod("GET")
           .withPath(path)
           .withImplementation(function grouping(this: any, field: string) {
-            const persistence = resolvePersistenceTarget(ModelConstr, this, fallback);
-            return invokeStatementPersistenceMethod(persistence, "statement", [
-              statementKey,
+            const persistence = resolvePersistenceTarget(
+              ModelConstr,
+              this,
+              fallback
+            );
+            return invokeDirectPersistenceMethod(persistence, statementKey, [
               field,
               this?.ctx,
             ]);
@@ -731,9 +984,17 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         .withMethod("GET")
         .withPath(path)
         .withImplementation(function complexQuery(this: any, ...args: any[]) {
-          const target = resolvePersistenceTarget(ModelConstr, this, persistence);
+          const target = resolvePersistenceTarget(
+            ModelConstr,
+            this,
+            persistence
+          );
           const normalizedArgs = normalizeQueryArgs(args);
-          return invokeRepositoryPersistenceMethod(target, methodName, normalizedArgs);
+          return invokeQueryPersistenceMethod(
+            target,
+            methodName,
+            normalizedArgs
+          );
         })
         .build()
     );
@@ -757,7 +1018,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           .withPath(params.path.replace(/^\/+|\/+$/g, ""))
           .withImplementation(function routedMethod(this: any, ...args: any[]) {
             const target = resolvePersistenceTarget(ModelConstr, this, source);
-            return invokeRepositoryPersistenceMethod(target, methodName, args);
+            return invokeQueryPersistenceMethod(target, methodName, args);
           })
           .build()
       );
