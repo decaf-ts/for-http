@@ -271,8 +271,8 @@ describe("Webhook Engine Full Integration Test", () => {
 
       nanoAdapter = new NanoAdapter(
         {
-          user: resources.user,
-          password: resources.password,
+          couchUser: resources.user,
+          couchPassword: resources.password,
           host: resources.host,
           dbName: resources.dbName,
           protocol: resources.protocol,

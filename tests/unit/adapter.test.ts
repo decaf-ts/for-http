@@ -218,4 +218,35 @@ describe("Axios adapter", function () {
       })
     );
   });
+
+  it("idInUrl=false omits id from create and update URLs", async function () {
+    const noIdCfg: HttpConfig = {
+      protocol: cfg.protocol,
+      host: cfg.host,
+      idInUrl: false,
+    };
+    const noIdAdapter = new AxiosHttpAdapter(noIdCfg, `noid-${Math.random()}`);
+    const noIdMock = jest.spyOn(noIdAdapter.client as Axios, "request");
+    noIdMock.mockImplementation(async (details: any) => ({
+      status: 200,
+      body: { method: details.method, url: details.url, data: details.data },
+    }));
+    const ctx = new Context().accumulate({ logger: Logging.get() });
+
+    await noIdAdapter.create(Test, id, record, ctx);
+    expect(noIdMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${tableName}`,
+        method: "POST",
+      })
+    );
+
+    await noIdAdapter.update(Test, id, record, ctx);
+    expect(noIdMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: `${cfg.protocol}://${cfg.host}/${tableName}`,
+        method: "PUT",
+      })
+    );
+  });
 });

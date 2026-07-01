@@ -513,6 +513,27 @@ export abstract class HttpAdapter<
     return idStr.split(composed.separator);
   }
 
+  /**
+   * @description Builds the URL for a single-resource write (create/update)
+   * @summary Honors the `idInUrl` config option (default true). When enabled,
+   * the id (and composed pk parts) are appended to the collection URL, matching
+   * the pre-existing REST behavior. When disabled, the URL targets the
+   * collection only.
+   * @template M - The model type
+   * @param {Constructor<M> | string} tableName - The model constructor or table name
+   * @param {PrimaryKeyType} id - The resource id (may be a composed pk)
+   * @return {string} The encoded URL string
+   */
+  protected writeUrl<M extends Model>(
+    tableName: Constructor<M> | string,
+    id: PrimaryKeyType
+  ): string {
+    const idInUrl = (this.config as HttpConfig).idInUrl !== false;
+    return idInUrl
+      ? this.url(tableName, this.extractIdArgs(tableName as Constructor<M>, id))
+      : this.url(tableName);
+  }
+
   parseResponse<M extends Model>(
     clazz: Constructor<M> | undefined,
     method: OperationKeys | string,
@@ -542,11 +563,11 @@ export abstract class HttpAdapter<
     model: Record<string, any>,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>> {
-    const url = this.url(tableName, this.extractIdArgs(tableName, id));
+    const url = this.writeUrl(tableName, id);
     const response = await this.post<Record<string, any>>(
       url,
       JSON.stringify(model),
-      undefined,
+      { headers: { "Content-Type": "application/json" } },
       ...args
     );
     return response.data as Record<string, any>;
@@ -563,7 +584,7 @@ export abstract class HttpAdapter<
     const response = await this.post<Record<string, any>[]>(
       url,
       JSON.stringify(model),
-      undefined,
+      { headers: { "Content-Type": "application/json" } },
       ...args
     );
     return response.data as Record<string, any>[];
@@ -622,11 +643,11 @@ export abstract class HttpAdapter<
     model: Record<string, any>,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>> {
-    const url = this.url(tableName, this.extractIdArgs(tableName, id));
+    const url = this.writeUrl(tableName, id);
     const response = await this.put<Record<string, any>>(
       url,
       JSON.stringify(model),
-      undefined,
+      { headers: { "Content-Type": "application/json" } },
       ...args
     );
     return response.data as Record<string, any>;
@@ -643,7 +664,7 @@ export abstract class HttpAdapter<
     const response = await this.put<Record<string, any>[]>(
       url,
       JSON.stringify(model),
-      undefined,
+      { headers: { "Content-Type": "application/json" } },
       ...args
     );
     return response.data as Record<string, any>[];
@@ -815,7 +836,12 @@ export abstract class HttpAdapter<
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: any[]
   ): E {
-    const msg = typeof err === "string" ? err : err.message;
+    const msg =
+      typeof err === "string"
+        ? err
+        : typeof err === "number"
+          ? String(err)
+          : err?.message || String(err ?? "");
     if (msg.includes(NotFoundError.name) || msg.includes("404"))
       return new NotFoundError(err) as E;
     if (msg.includes(ConflictError.name) || msg.includes("409"))

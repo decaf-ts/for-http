@@ -13,6 +13,7 @@ export type ResponseParser = <
  * @typedef {Object} HttpConfig
  * @property {('http'|'https')} protocol - The HTTP protocol to use
  * @property {string} host - The host address
+ * @property {boolean} [idInUrl=true] - When true (default), write operations (create, update) include the resource id (and composed pk parts) in the URL path, matching REST semantics. Set to false to POST/PUT against the collection URL only.
  * @memberOf module:for-http
  */
 export type HttpConfig = {
@@ -25,6 +26,7 @@ export type HttpConfig = {
   eventHeaderResolver?: () =>
     | Promise<Record<string, string>>
     | Record<string, string>;
+  idInUrl?: boolean;
 };
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";

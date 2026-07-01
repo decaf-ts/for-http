@@ -44,8 +44,8 @@ async function createNanoTestResources() {
   return {
     connection,
     dbName,
-    user,
-    password,
+    couchUser: user,
+    couchPassword: password,
     host: dbHost,
     protocol: dbProtocol,
   };
