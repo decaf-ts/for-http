@@ -534,7 +534,6 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   }
 
   addStatementRoute(): this {
-    if (!allowsRawStatements(this.persistence)) return this;
     if (
       isOperationBlocked(
         this.ModelConstr,
