@@ -33,6 +33,12 @@ type RouteMetadata = Record<
 
 type QueryMetadata = Record<string, { fields?: string[] | undefined }>;
 
+function normalizeBulkIds(ids: string | string[] | undefined | null): string[] {
+  if (Array.isArray(ids)) return ids;
+  if (typeof ids === "string") return [ids];
+  return [];
+}
+
 function allowsRawStatements(persistence: any): boolean {
   const candidates = [
     persistence,
@@ -460,7 +466,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             fallback
           );
           return invokeDirectPersistenceMethod(persistence, "readAll", [
-            ids,
+            normalizeBulkIds(ids),
             this?.ctx,
           ]);
         })
@@ -524,7 +530,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             fallback
           );
           return invokeDirectPersistenceMethod(persistence, "deleteAll", [
-            ids,
+            normalizeBulkIds(ids),
             this?.ctx,
           ]);
         })

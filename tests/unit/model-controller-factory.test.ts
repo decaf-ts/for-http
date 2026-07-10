@@ -269,7 +269,7 @@ describe("server/controllers/ModelControllerFactory", () => {
 
     expect(routes).not.toContainEqual({
       method: "GET",
-      path: "statement/:method/*args",
+      path: "raw/:method/*args",
     });
   });
 
@@ -287,6 +287,43 @@ describe("server/controllers/ModelControllerFactory", () => {
 
     expect(() => route.implementation.call({ ctx: {} }, {})).toThrow(
       InternalError
+    );
+  });
+
+  it("normalizes single bulk ids into arrays for read and delete routes", () => {
+    const readAll = jest.fn();
+    const deleteAll = jest.fn();
+    const persistence = {
+      class: FactoryQueryModel,
+      readAll,
+      deleteAll,
+    } as any;
+
+    const Controller = new ModelControllerBuilder(
+      FactoryQueryModel,
+      persistence
+    )
+      .addBulkReadRoute()
+      .addBulkDeleteRoute()
+      .build() as any;
+
+    const bulkReadRoute = Controller.__routes__.find(
+      (route: any) => route.method === "GET" && route.path === "bulk"
+    );
+    const bulkDeleteRoute = Controller.__routes__.find(
+      (route: any) => route.method === "DELETE" && route.path === "bulk"
+    );
+
+    bulkReadRoute.implementation.call({ ctx: { requestId: "read" } }, "one-id");
+    bulkDeleteRoute.implementation.call(
+      { ctx: { requestId: "delete" } },
+      "one-id"
+    );
+
+    expect(readAll).toHaveBeenCalledWith(["one-id"], { requestId: "read" });
+    expect(deleteAll).toHaveBeenCalledWith(
+      ["one-id"],
+      { requestId: "delete" }
     );
   });
 });
