@@ -5,4 +5,5 @@
  * form the base contract for all Decaf server-side auth integrations.
  */
 export * from "./types";
+export * from "./constants";
 export * from "./AuthHandler";

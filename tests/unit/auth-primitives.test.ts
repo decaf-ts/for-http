@@ -1,5 +1,6 @@
 import { AuthHandler, AuthData, AuthRequestLike } from "../../src/server/auth";
-import { Context, AuthorizationError } from "@decaf-ts/core";
+import { Context, AuthorizationError, type ContextualArgs } from "@decaf-ts/core";
+import type { Constructor } from "@decaf-ts/decoration";
 
 describe("server auth primitives", () => {
   describe("AuthRequestLike", () => {
@@ -21,9 +22,16 @@ describe("server auth primitives", () => {
       }
 
       class TestHandler extends AuthHandler<MyCtx, Context, AuthData> {
-        protected extractFromAuth(ctx: MyCtx): AuthData {
-          const req = ctx.switchToHttp().getRequest();
-          const token = req.headers?.authorization as string;
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return ctx.switchToHttp().getRequest();
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          const token = request.headers?.authorization as string;
           if (!token) throw new AuthorizationError("no token");
           return { user: token, roles: ["user"] };
         }
@@ -61,9 +69,16 @@ describe("server auth primitives", () => {
       }
 
       class MinimalHandler extends AuthHandler<MyCtx, Context, AuthData> {
-        protected extractFromAuth(ctx: MyCtx): AuthData {
-          const req = ctx.getRequest();
-          if (!req.headers?.authorization)
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return ctx.getRequest();
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          if (!request.headers?.authorization)
             throw new AuthorizationError("no token");
           return { roles: ["user"] };
         }
@@ -88,8 +103,16 @@ describe("server auth primitives", () => {
       }
 
       class RoleHandler extends AuthHandler<MyCtx, Context, AuthData> {
-        protected extractFromAuth(ctx: MyCtx): AuthData {
-          return { roles: ctx.getRoles() };
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return { roles: ctx.getRoles() } as AuthRequestLike;
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          return { roles: (request as any).roles ?? [] };
         }
       }
 
@@ -125,11 +148,22 @@ describe("server auth primitives", () => {
         Context,
         RichAuthData
       > {
-        protected extractFromAuth(ctx: MyCtx): RichAuthData {
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
           return {
             user: ctx.getUserId(),
+            organization: ctx.getTenant(),
+          } as AuthRequestLike;
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): RichAuthData {
+          return {
+            user: request.user as string | undefined,
             roles: ["user"],
-            tenant: ctx.getTenant(),
+            tenant: request.organization as string,
           };
         }
 
@@ -167,19 +201,36 @@ describe("server auth primitives", () => {
       }
 
       class ValidatingHandler extends AuthHandler<MyCtx, Context, AuthData> {
-        protected extractFromAuth(ctx: MyCtx): AuthData {
-          return { user: ctx.getToken(), roles: ["user"] };
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return { user: ctx.getToken() } as AuthRequestLike;
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          return { user: request.user as string, roles: ["user"] };
         }
 
         protected override async validate(
           data: AuthData,
           routeRoles: string[] | undefined,
+          routeNamespaces: string[] | undefined,
+          skipModelNamespaces: boolean | undefined,
           model: string | Constructor,
           ...args: ContextualArgs<Context>
         ): Promise<void> {
           if (!data.user || data.user === "invalid")
             throw new AuthorizationError("Token rejected by custom validate");
-          await super.validate(data, routeRoles, model, ...args);
+          await super.validate(
+            data,
+            routeRoles,
+            routeNamespaces,
+            skipModelNamespaces,
+            model,
+            ...args
+          );
         }
       }
 
@@ -200,6 +251,150 @@ describe("server auth primitives", () => {
           "Model",
           undefined,
           new Context()
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    it("binds parsed auth data before verification fails", async () => {
+      interface MyCtx {
+        getRequest(): AuthRequestLike;
+      }
+
+      class SplitHandler extends AuthHandler<MyCtx, Context, AuthData> {
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return ctx.getRequest();
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected override parseFromRequest(_request: AuthRequestLike): AuthData {
+          return {
+            user: "parsed-user",
+            organization: "parsed-org",
+            roles: ["user"],
+          };
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          return this.parseFromRequest(request);
+        }
+
+        protected override async validateAuth(): Promise<void> {
+          throw new AuthorizationError("signature rejected");
+        }
+      }
+
+      const handler = new SplitHandler();
+      const context = new Context();
+      const store: Record<string, unknown> = {};
+      (context as any).accumulate = (value: Record<string, unknown>) => {
+        Object.assign(store, value);
+        return context;
+      };
+
+      await expect(
+        handler.authorize(
+          {
+            getRequest: () => ({
+              headers: { authorization: "Bearer parsed-user" },
+              path: "/",
+              method: "GET",
+            }),
+          },
+          "Model",
+          undefined,
+          context
+        )
+      ).rejects.toThrow("signature rejected");
+
+      expect(store.user).toBe("parsed-user");
+      expect(store.organization).toBe("parsed-org");
+      expect(store.logger).toBeDefined();
+    });
+
+    it("checks requiredNamespaces passed before the context arg", async () => {
+      interface MyCtx {
+        getClaims(): { roles: string[]; namespaces: string[] };
+      }
+
+      class NamespaceHandler extends AuthHandler<MyCtx, Context, AuthData> {
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return {
+            roles: ctx.getClaims().roles,
+            namespaces: ctx.getClaims().namespaces,
+          } as AuthRequestLike;
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          return {
+            user: "namespace-user",
+            roles: (request.roles as string[]) ?? [],
+            namespaces: (request.namespaces as string[]) ?? [],
+          };
+        }
+      }
+
+      const handler = new NamespaceHandler();
+      const ctx: MyCtx = {
+        getClaims: () => ({
+          roles: ["reader"],
+          namespaces: ["tenant:alpha"],
+        }),
+      };
+      const context = new Context();
+
+      await expect(
+        handler.authorize(ctx, "Model", undefined, ["tenant:beta"], false, context)
+      ).rejects.toThrow("Missing required namespaces: tenant:beta");
+
+      await expect(
+        handler.authorize(ctx, "Model", undefined, ["tenant:alpha"], false, context)
+      ).resolves.toBeUndefined();
+    });
+
+    it("can normalize role and namespace claims to a shared separator", async () => {
+      interface MyCtx {
+        getClaims(): string[];
+      }
+
+      class NormalizingHandler extends AuthHandler<MyCtx, Context, AuthData> {
+        protected requestFromContext(ctx: MyCtx): AuthRequestLike {
+          return { roles: ctx.getClaims() } as AuthRequestLike;
+        }
+
+        protected override isPublicRequest(): boolean {
+          return false;
+        }
+
+        protected extractFromRequest(request: AuthRequestLike): AuthData {
+          return {
+            user: "normalized-user",
+            roles: (request.roles as string[]) ?? [],
+          };
+        }
+
+        protected override normalizeClaim(claim: string): string {
+          return claim.replace(/-/g, ":");
+        }
+      }
+
+      const handler = new NormalizingHandler();
+      const context = new Context();
+
+      await expect(
+        handler.authorize(
+          { getClaims: () => ["tenant-alpha"] },
+          "Model",
+          undefined,
+          ["tenant:alpha"],
+          false,
+          context
         )
       ).resolves.toBeUndefined();
     });

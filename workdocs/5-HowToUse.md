@@ -162,6 +162,55 @@ const ctx = { flags } as unknown as Context<AxiosFlags>;
 const user = await users.read("u1", ctx);
 ```
 
+## Auth handler contract
+
+`@decaf-ts/for-http` exposes the framework-agnostic `AuthHandler<EC, C, D>` base class used by the Nest integration and any other platform-specific auth bridge.
+
+Use `AuthHandler` when you need to:
+
+- extract a user identity, roles, namespaces, and organization from a platform execution context
+- validate route-level and model-level roles
+- validate route-level and model-level namespace scopes
+- bind the resulting auth data onto a request context for downstream decorators and services
+
+`namespace(...)` from `@decaf-ts/integrations/nest` attaches namespace metadata. `AuthHandler` reads that metadata the same way it reads `@roles(...)` metadata, but the two are separate claim sets:
+
+- roles satisfy role checks
+- namespaces satisfy namespace checks
+
+`@RequireNamespaces(...)` in `for-nest` is just the Nest-facing decorator that sets the route-level namespace metadata consumed by this base class.
+
+```ts
+import { AuthHandler, type AuthData } from "@decaf-ts/for-http/server";
+import { Context, AuthorizationError, type ContextualArgs } from "@decaf-ts/core";
+import type { Constructor } from "@decaf-ts/decoration";
+import { namespace } from "@decaf-ts/integrations/nest";
+
+@namespace(["tenant:acme"])
+class Product {}
+
+class MyAuthHandler extends AuthHandler<{ getHeader(name: string): string | undefined }, Context, AuthData> {
+  protected extractFromAuth(ctx: { getHeader(name: string): string | undefined }): AuthData {
+    const token = ctx.getHeader("authorization");
+    if (!token) throw new AuthorizationError("Unauthenticated");
+    return { user: token, roles: ["reader"], namespaces: ["tenant:acme"] };
+  }
+
+  protected override async validate(
+    data: AuthData,
+    routeRoles: string[] | undefined,
+    routeNamespaces: string[] | undefined,
+    skipModelNamespaces: boolean | undefined,
+    model: string | Constructor,
+    ...args: ContextualArgs<Context>
+  ): Promise<void> {
+    await super.validate(data, routeRoles, routeNamespaces, skipModelNamespaces, model, ...args);
+  }
+}
+```
+
+When you override `validate`, keep the trailing `Context` argument last. The base class uses that trailing argument to resolve the logging/contextual state.
+
 ## Subclassing: Custom HttpAdapter
 
 Description: Implement a custom adapter for a different HTTP client. You must implement request and CRUD methods at minimum.

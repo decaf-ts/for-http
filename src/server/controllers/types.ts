@@ -18,7 +18,9 @@ export type BulkStatementFlags = {
 export interface AuthConfig {
   public?: boolean;
   roles?: string[];
+  namespaces?: string[];
   skipModelRoles?: boolean;
+  skipModelNamespaces?: boolean;
 }
 
 export interface ModelControllerFactoryConfig {

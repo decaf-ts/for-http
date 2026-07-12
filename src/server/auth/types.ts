@@ -25,10 +25,12 @@ export interface UserData {
   user?: string;
   /** Roles granted to the user (from JWT, header, or other auth source). */
   roles?: string[];
+  /** Namespace scopes granted to the user (from JWT, header, or other auth source). */
+  namespaces?: string[];
 }
 
 /**
- * Auth data extracted from the request by {@link AuthHandler.extractFromAuth}.
+ * Auth data extracted from the request by {@link AuthHandler.extractFromRequest}.
  *
  * Concrete handlers may return a wider object — the extra fields can be bound to
  * the request context by overriding {@link AuthHandler.bindToContext}.
