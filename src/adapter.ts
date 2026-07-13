@@ -24,6 +24,7 @@ import {
   SequenceOptions,
   Statement,
   UnsupportedError,
+  Observer,
 } from "@decaf-ts/core";
 import {
   BadRequestError,
@@ -58,6 +59,7 @@ import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
 import { HttpDispatcher } from "./HttpDispatcher";
 import { DecafHeaders } from "./constants";
+import { ObserverFilter } from "@decaf-ts/core";
 
 export function suffixMethod(
   obj: any,
@@ -191,6 +193,23 @@ export abstract class HttpAdapter<
 
   protected override Dispatch(): any {
     return new HttpDispatcher();
+  }
+
+  override observe(observer: Observer, filter?: ObserverFilter): () => void {
+    const unregister = super.observe(observer, filter);
+    if (this.dispatch)
+      (this.dispatch as HttpDispatcher)
+        .syncSubscriptions()
+        .catch((e) => console.warn(`Failed to sync event subscriptions: ${e}`));
+    return unregister;
+  }
+
+  override unObserve(observer: Observer): void {
+    super.unObserve(observer);
+    if (this.dispatch)
+      (this.dispatch as HttpDispatcher)
+        .syncSubscriptions()
+        .catch((e) => console.warn(`Failed to sync event subscriptions: ${e}`));
   }
 
   protected async getEventHeaders() {

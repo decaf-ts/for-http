@@ -23,6 +23,7 @@ export type HttpConfig = {
   eventsListenerPath?: string;
   headers?: boolean;
   events?: boolean;
+  eventsSubscription?: boolean;
   eventHeaderResolver?: () =>
     | Promise<Record<string, string>>
     | Record<string, string>;

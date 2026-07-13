@@ -1,5 +1,9 @@
 import { AuthHandler, AuthData, AuthRequestLike } from "../../src/server/auth";
-import { Context, AuthorizationError, type ContextualArgs } from "@decaf-ts/core";
+import {
+  Context,
+  AuthorizationError,
+  type ContextualArgs,
+} from "@decaf-ts/core";
 import type { Constructor } from "@decaf-ts/decoration";
 
 describe("server auth primitives", () => {
@@ -36,8 +40,14 @@ describe("server auth primitives", () => {
           return { user: token, roles: ["user"] };
         }
 
-        protected override bindToContext(context: Context, data: AuthData): void {
-          context.accumulate({ UUID: data.user, organization: data.organization });
+        protected override bindToContext(
+          context: Context,
+          data: AuthData
+        ): void {
+          context.accumulate({
+            UUID: data.user,
+            organization: data.organization,
+          });
         }
       }
 
@@ -143,11 +153,7 @@ describe("server auth primitives", () => {
         tenant: string;
       }
 
-      class RichBindHandler extends AuthHandler<
-        MyCtx,
-        Context,
-        RichAuthData
-      > {
+      class RichBindHandler extends AuthHandler<MyCtx, Context, RichAuthData> {
         protected requestFromContext(ctx: MyCtx): AuthRequestLike {
           return {
             user: ctx.getUserId(),
@@ -269,7 +275,10 @@ describe("server auth primitives", () => {
           return false;
         }
 
-        protected override parseFromRequest(_request: AuthRequestLike): AuthData {
+        protected override parseFromRequest(
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _request: AuthRequestLike
+        ): AuthData {
           return {
             user: "parsed-user",
             organization: "parsed-org",
@@ -350,11 +359,25 @@ describe("server auth primitives", () => {
       const context = new Context();
 
       await expect(
-        handler.authorize(ctx, "Model", undefined, ["tenant:beta"], false, context)
+        handler.authorize(
+          ctx,
+          "Model",
+          undefined,
+          ["tenant:beta"],
+          false,
+          context
+        )
       ).rejects.toThrow("Missing required namespaces: tenant:beta");
 
       await expect(
-        handler.authorize(ctx, "Model", undefined, ["tenant:alpha"], false, context)
+        handler.authorize(
+          ctx,
+          "Model",
+          undefined,
+          ["tenant:alpha"],
+          false,
+          context
+        )
       ).resolves.toBeUndefined();
     });
 
