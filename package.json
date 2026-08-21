@@ -130,7 +130,9 @@
     "@decaf-ts/logging": "latest",
     "@decaf-ts/transactional-decorators": "latest",
     "axios": "^1.15.2",
-    "event-source-plus": "^0.1.15"
+    "better-docs": "^2.7.3",
+    "event-source-plus": "^0.1.15",
+    "taffydb": "^2.7.3"
   },
   "overrides": {
     "test-exclude": "^7.0.2",

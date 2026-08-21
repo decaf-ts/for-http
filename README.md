@@ -29,7 +29,7 @@ A lightweight HTTP adapter layer for decaf-ts that enables CRUD-style repositori
 
 Documentation available [here](https://decaf-ts.github.io/for-http/)
 
-Minimal size: 7.9 KB kb gzipped
+Minimal size: ##PACKAGE_SIZE## kb gzipped
 
 
 # decaf-ts/for-http — Detailed Description
