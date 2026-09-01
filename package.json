@@ -47,6 +47,17 @@
         "default": "./lib/cjs/server/hooks/index.cjs"
       },
       "default": "./lib/esm/server/hooks/index.js"
+    },
+    "./hooks/utils": {
+      "import": {
+        "types": "./lib/types/server/hooks/utils.d.mts",
+        "default": "./lib/esm/server/hooks/utils.js"
+      },
+      "require": {
+        "types": "./lib/types/server/hooks/utils.d.cts",
+        "default": "./lib/cjs/server/hooks/utils.cjs"
+      },
+      "default": "./lib/esm/server/hooks/utils.js"
     }
   },
   "types": "./lib/types/index.d.mts",
@@ -130,9 +141,7 @@
     "@decaf-ts/logging": "latest",
     "@decaf-ts/transactional-decorators": "latest",
     "axios": "^1.15.2",
-    "better-docs": "^2.7.3",
-    "event-source-plus": "^0.1.15",
-    "taffydb": "^2.7.3"
+    "event-source-plus": "^0.1.15"
   },
   "overrides": {
     "test-exclude": "^7.0.2",
