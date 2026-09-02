@@ -18,6 +18,8 @@ const config = {
   extensionsToTreatAsEsm: [".ts", ".tsx"],
   testEnvironment: "node",
   testRegex: "/tests/.*\\.(test|spec)\\.(ts|tsx)$",
+  // debug scratch test - imports workspace-sibling fixtures (for-nest tests), CI-incompatible
+  testPathIgnorePatterns: ["/node_modules/", "/tests/unit/debug-metadata.test.ts"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   coverageDirectory: "./workdocs/reports/coverage",
   collectCoverage: false,

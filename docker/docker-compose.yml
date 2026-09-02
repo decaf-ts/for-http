@@ -1,0 +1,107 @@
+services:
+  replica-0:
+    image: ghcr.io/decaf-ts/couchdb:latest
+    hostname: replica-0
+    container_name: replica-0
+    restart: always
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}
+      COUCHDB_SECRET: ${COUCHDB_SECRET}
+      NODENAME: replica-0.${COMPOSE_PROJECT_NAME}
+      ERL_FLAGS: "-setcookie ${COUCHDB_COOKIE}"
+    networks:
+      replicas_net:
+        aliases:
+          - replica-0.${COMPOSE_PROJECT_NAME}
+    ports:
+      - "${PORT_BASE}0:5984"
+    volumes:
+      - couch-replica-0:/opt/couchdb/data
+      - cfg-replica-0:/opt/couchdb/etc/local.d
+    healthcheck:
+      test: curl -f http://localhost:5984/ || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 10
+  replica-1:
+    image: ghcr.io/decaf-ts/couchdb:latest
+    hostname: replica-1
+    container_name: replica-1
+    restart: always
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}
+      COUCHDB_SECRET: ${COUCHDB_SECRET}
+      NODENAME: replica-1.${COMPOSE_PROJECT_NAME}
+      ERL_FLAGS: "-setcookie ${COUCHDB_COOKIE}"
+    networks:
+      replicas_net:
+        aliases:
+          - replica-1.${COMPOSE_PROJECT_NAME}
+    ports:
+      - "${PORT_BASE}1:5984"
+    volumes:
+      - couch-replica-1:/opt/couchdb/data
+      - cfg-replica-1:/opt/couchdb/etc/local.d
+    healthcheck:
+      test: curl -f http://localhost:5984/ || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 10
+  replica-2:
+    image: ghcr.io/decaf-ts/couchdb:latest
+    hostname: replica-2
+    container_name: replica-2
+    restart: always
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}
+      COUCHDB_SECRET: ${COUCHDB_SECRET}
+      NODENAME: replica-2.${COMPOSE_PROJECT_NAME}
+      ERL_FLAGS: "-setcookie ${COUCHDB_COOKIE}"
+    networks:
+      replicas_net:
+        aliases:
+          - replica-2.${COMPOSE_PROJECT_NAME}
+    ports:
+      - "${PORT_BASE}2:5984"
+    volumes:
+      - couch-replica-2:/opt/couchdb/data
+      - cfg-replica-2:/opt/couchdb/etc/local.d
+    healthcheck:
+      test: curl -f http://localhost:5984/ || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 10
+  booter:
+    image: ghcr.io/decaf-ts/couchdb-booter:latest
+    container_name: cluster-booter
+    hostname: cluster-booter
+    restart: on-failure
+    depends_on:
+      replica-0:
+        condition: service_healthy
+      replica-1:
+        condition: service_healthy
+      replica-2:
+        condition: service_healthy
+    networks:
+      replicas_net:
+        aliases:
+          - booter.${COMPOSE_PROJECT_NAME}
+    environment:
+      COORDINATOR_HOST: replica-0.${COMPOSE_PROJECT_NAME}
+      REPLICA1_HOST: replica-1.${COMPOSE_PROJECT_NAME}
+      REPLICA2_HOST: replica-2.${COMPOSE_PROJECT_NAME}
+
+networks:
+  replicas_net:
+
+volumes:
+  couch-replica-0:
+  cfg-replica-0:
+  couch-replica-1:
+  cfg-replica-1:
+  couch-replica-2:
+  cfg-replica-2:
