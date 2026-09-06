@@ -25,17 +25,37 @@ import {
   ContextualLoggedClass,
   PersistenceKeys,
 } from "@decaf-ts/core";
-import { Logger, Logging } from "@decaf-ts/logging";
+import { Logger, Logging, LogMeta } from "@decaf-ts/logging";
 import { Model } from "@decaf-ts/decorator-validation";
 
 import { AUTH_NAMESPACE_KEY } from "./constants";
 import type { AuthData, AuthRequestLike } from "./types";
+
+/**
+ * OCSF action-log outcome values. The spec restricts these to a fixed set.
+ */
+export type AuthActionOutcome = "success" | "failure" | "error" | "unknown";
+
+/**
+ * OCSF event class uids used by the auth `logAccess` action logs.
+ *
+ * - `3001` — authentication class: auth attempt results (login success/failure).
+ * - `3002` — account session class: session start/renewal/termination boundaries.
+ */
+export const AUTH_CLASS_UID_AUTHENTICATION = 3001;
+export const AUTH_CLASS_UID_ACCOUNT_SESSION = 3002;
 
 export abstract class AuthHandler<
   EC = unknown,
   C extends Context = Context,
   D extends AuthData = AuthData,
 > extends ContextualLoggedClass<C> {
+  /**
+   * When enabled, the auth handler emits OCSF-style action logs (`action()`)
+   * for login/logout and session boundaries so they can be indexed for BI.
+   */
+  public logAccess = false;
+
   /**
    * Resolves the request from the platform-specific execution context.
    *
@@ -145,6 +165,12 @@ export abstract class AuthHandler<
 
   /**
    * Returns a logger enriched with request-level auth metadata.
+   *
+   * Binds every property available at the earliest possible point — request IP,
+   * user/tenant identification, and session metadata — so downstream logs (not
+   * just the `logAccess` action log) carry the auth context. Server-related props
+   * (`ip`) are registered in for-http/server; identity (`user`/`organization`)
+   * and session enrichment are registered by the consuming integration.
    */
   protected bindLogger(log: Logger, request: AuthRequestLike, data: D): Logger {
     const meta: Record<string, unknown> = {};
@@ -154,6 +180,9 @@ export abstract class AuthHandler<
     if (ip) meta.ip = ip;
     if (user) meta.user = user;
     if (organization) meta.organization = organization;
+    const session = this.authSessionOf(data);
+    if (session?.id) meta.sessionId = session.id;
+    if (session?.type) meta.sessionType = session.type;
     return Object.keys(meta).length ? log.for(meta) : log;
   }
 
@@ -242,17 +271,175 @@ export abstract class AuthHandler<
       return;
     }
 
-    const data = await this.prime(request, ctx);
-    await this.validateAuth(data, request);
-    await this.validate(
-      data,
-      requiredRoles,
-      requiredNamespaces,
-      skipModelNamespaces,
-      model,
-      ...ctxArgs
+    let data: D | undefined;
+    const started = Date.now();
+    try {
+      data = await this.prime(request, ctx);
+      await this.validateAuth(data, request);
+      await this.validate(
+        data,
+        requiredRoles,
+        requiredNamespaces,
+        skipModelNamespaces,
+        model,
+        ...ctxArgs
+      );
+      log.debug(`Authorization granted for user ${data.user ?? "unknown"}`);
+      if (this.logAccess) {
+        this.logAccessResult(log, {
+          name: "user_login",
+          classUid: AUTH_CLASS_UID_AUTHENTICATION,
+          outcome: "success",
+          durationMs: Date.now() - started,
+          data,
+        });
+      }
+    } catch (error) {
+      log.debug(
+        `Authorization denied for user ${data?.user ?? "unknown"}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      if (this.logAccess) {
+        this.logAccessResult(log, {
+          name: "user_login",
+          classUid: AUTH_CLASS_UID_AUTHENTICATION,
+          outcome: this.ocsfOutcomeOf(error),
+          durationMs: Date.now() - started,
+          data,
+          error,
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Maps an auth error to one of the OCSF outcomes.
+   *
+   * Decaf auth failures (an {@link AuthorizationError} or subclass) map to
+   * `failure`; any other unexpected error maps to `error`. `success`/`unknown`
+   * are reserved for the no-error / indeterminate cases.
+   */
+  protected ocsfOutcomeOf(error: unknown): AuthActionOutcome {
+    if (!error) return "success";
+    if (error instanceof AuthorizationError) return "failure";
+    const name =
+      (error as { name?: string })?.name ?? (error as any)?.constructor?.name;
+    if (name && /auth|token|credential|unauthorized/i.test(name)) {
+      return "failure";
+    }
+    return "error";
+  }
+
+  /**
+   * Builds the OCSF session metadata for auth action logs.
+   *
+   * Providers can override to surface a session id (e.g. from a JWT `sid`
+   * claim). The default provides an interactive-session type with no id.
+   */
+  protected authSessionOf(data?: D): { id?: string; type?: string } | undefined {
+    void data;
+    return { type: "bi_interactive_session" };
+  }
+
+  /**
+   * Builds the auth action custom-property payload.
+   *
+   * Unlike the previous structured record, the OCSF auth fields are flattened
+   * into logger custom properties. `class_uid` becomes the `action()` call's
+   * `code` argument, so it is NOT carried here. `error_code` is already emitted
+   * via the logger's error path (`errorCode`) and `actor.user` is already bound
+   * by the auth handler on decode, so neither is duplicated here.
+   */
+  protected buildAuthActionMeta(
+    params: {
+      name: string;
+      outcome: AuthActionOutcome;
+      durationMs?: number;
+      data?: D;
+    }
+  ): LogMeta {
+    const meta: LogMeta = { name: params.name, outcome: params.outcome };
+    if (params.durationMs !== undefined) {
+      meta.duration_ms = params.durationMs;
+    }
+    const session = this.authSessionOf(params.data);
+    if (session?.id) meta.sessionId = session.id;
+    if (session?.type) meta.sessionType = session.type;
+    return meta;
+  }
+
+  /**
+   * Emits an OCSF auth action log on the supplied logger.
+   */
+  protected logAccessResult(
+    log: Logger,
+    params: {
+      name: string;
+      classUid: 3001 | 3002;
+      outcome: AuthActionOutcome;
+      durationMs?: number;
+      data?: D;
+      error?: unknown;
+    }
+  ): void {
+    const meta = this.buildAuthActionMeta(params);
+    this.emitAuthAction(log, params.name, params.classUid, meta);
+  }
+
+  /**
+   * Emits an OCSF action log via the logger `action()` API. The `classUid`
+   * becomes the `code` argument; the remaining auth fields are passed as
+   * custom properties so JSON log transports can index them.
+   */
+  protected emitAuthAction(
+    log: Logger,
+    name: string,
+    classUid: number,
+    meta: LogMeta
+  ): void {
+    log.action(
+      name,
+      `${name} ${String(meta.outcome ?? "unknown")}`,
+      classUid,
+      meta
     );
-    log.debug(`Authorization granted for user ${data.user ?? "unknown"}`);
+  }
+
+  /**
+   * Emits a session-boundary action log (OCSF class_uid 3002), e.g. on logout
+   * or session termination. When `log` is omitted the handler's own logger is
+   * used.
+   */
+  public logAccessSessionEvent(
+    log: Logger | undefined,
+    params: {
+      name: string;
+      outcome?: AuthActionOutcome;
+      user?: string;
+      sessionId?: string;
+      durationMs?: number;
+    }
+  ): void {
+    const meta: LogMeta = {
+      name: params.name,
+      outcome: params.outcome ?? "success",
+      sessionType: "bi_interactive_session",
+    };
+    if (params.sessionId !== undefined) {
+      meta.sessionId = params.sessionId;
+    }
+    if (params.durationMs !== undefined) {
+      meta.duration_ms = params.durationMs;
+    }
+    if (params.user) meta.user = params.user;
+    this.emitAuthAction(
+      log ?? Logging.for(this as any),
+      params.name,
+      AUTH_CLASS_UID_ACCOUNT_SESSION,
+      meta
+    );
   }
 
   protected async validate(
