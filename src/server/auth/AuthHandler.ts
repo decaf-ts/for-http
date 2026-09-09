@@ -286,13 +286,18 @@ export abstract class AuthHandler<
       );
       log.debug(`Authorization granted for user ${data.user ?? "unknown"}`);
       if (this.logAccess) {
-        this.logAccessResult(log, {
-          name: "user_login",
-          classUid: AUTH_CLASS_UID_AUTHENTICATION,
-          outcome: "success",
-          durationMs: Date.now() - started,
-          data,
-        });
+        this.emitAuthAction(
+          log,
+          "user_login",
+          AUTH_CLASS_UID_AUTHENTICATION,
+          this.buildAuthActionMeta({
+            name: "user_login",
+            outcome: "success",
+            durationMs: Date.now() - started,
+            data,
+            operation: ctx.getOrUndefined("operation" as any),
+          })
+        );
       }
     } catch (error) {
       log.debug(
@@ -300,16 +305,20 @@ export abstract class AuthHandler<
           error instanceof Error ? error.message : String(error)
         }`
       );
-      if (this.logAccess) {
-        this.logAccessResult(log, {
+      // Auth failures are always action-logged for auditing, regardless of the
+      // opt-in `logAccess` flag that gates the (higher-volume) success path.
+      this.emitAuthAction(
+        log,
+        "user_login",
+        AUTH_CLASS_UID_AUTHENTICATION,
+        this.buildAuthActionMeta({
           name: "user_login",
-          classUid: AUTH_CLASS_UID_AUTHENTICATION,
           outcome: this.ocsfOutcomeOf(error),
           durationMs: Date.now() - started,
           data,
-          error,
-        });
-      }
+          operation: ctx.getOrUndefined("operation" as any),
+        })
+      );
       throw error;
     }
   }
@@ -358,11 +367,15 @@ export abstract class AuthHandler<
       outcome: AuthActionOutcome;
       durationMs?: number;
       data?: D;
+      operation?: string;
     }
   ): LogMeta {
     const meta: LogMeta = { name: params.name, outcome: params.outcome };
     if (params.durationMs !== undefined) {
       meta.duration_ms = params.durationMs;
+    }
+    if (params.operation !== undefined) {
+      meta.operation = params.operation;
     }
     const session = this.authSessionOf(params.data);
     if (session?.id) meta.sessionId = session.id;
@@ -371,27 +384,9 @@ export abstract class AuthHandler<
   }
 
   /**
-   * Emits an OCSF auth action log on the supplied logger.
-   */
-  protected logAccessResult(
-    log: Logger,
-    params: {
-      name: string;
-      classUid: 3001 | 3002;
-      outcome: AuthActionOutcome;
-      durationMs?: number;
-      data?: D;
-      error?: unknown;
-    }
-  ): void {
-    const meta = this.buildAuthActionMeta(params);
-    this.emitAuthAction(log, params.name, params.classUid, meta);
-  }
-
-  /**
    * Emits an OCSF action log via the logger `action()` API. The `classUid`
-   * becomes the `code` argument; the remaining auth fields are passed as
-   * custom properties so JSON log transports can index them.
+   * becomes the `code` argument; the remaining auth fields are carried as meta
+   * (this API carries no message - the action name and meta are the payload).
    */
   protected emitAuthAction(
     log: Logger,
@@ -399,12 +394,7 @@ export abstract class AuthHandler<
     classUid: number,
     meta: LogMeta
   ): void {
-    log.action(
-      name,
-      `${name} ${String(meta.outcome ?? "unknown")}`,
-      classUid,
-      meta
-    );
+    log.action(name, classUid, meta);
   }
 
   /**

@@ -164,6 +164,39 @@ describe("AuthHandler OCSF logAccess", () => {
       expect(meta.error_code).toBeUndefined();
     });
 
+    it("always emits a failure action log even when logAccess is false", async () => {
+      const handler = new TestAuthHandler();
+      handler.logAccess = false;
+      handler.extractError = new AuthorizationError("no token");
+      const context = new Context();
+      await expect(
+        handler.authorize(
+          { request: handler.requestValue } as MyCtx,
+          "Model",
+          undefined,
+          context
+        )
+      ).rejects.toThrow(AuthorizationError);
+      expect(handler.actions).toHaveLength(1);
+      expect(handler.actions[0].meta.outcome).toBe("failure");
+    });
+
+    it("includes the in-flight operation (from ctx) in the failure meta", async () => {
+      const handler = new TestAuthHandler();
+      handler.logAccess = false;
+      handler.extractError = new AuthorizationError("no token");
+      const context = new Context().accumulate({ operation: "GET /models/1" });
+      await expect(
+        handler.authorize(
+          { request: handler.requestValue } as MyCtx,
+          "Model",
+          undefined,
+          context
+        )
+      ).rejects.toThrow(AuthorizationError);
+      expect(handler.actions[0].meta.operation).toBe("GET /models/1");
+    });
+
     it("emits user_login failure when role validation fails after data extraction", async () => {
       const handler = new TestAuthHandler();
       handler.logAccess = true;
@@ -330,24 +363,25 @@ describe("AuthHandler OCSF logAccess", () => {
       logger: Logger;
       calls: {
         name: string;
-        message: string;
         classUid: number;
         meta: LogMeta;
       }[];
     } => {
       const calls: {
         name: string;
-        message: string;
         classUid: number;
         meta: LogMeta;
       }[] = [];
       const logger = {
-        action: (name: string, message: string, classUid?: number, ...rest: any[]) => {
+        action: (name: string, codeOrMeta?: number | LogMeta, meta?: LogMeta) => {
+          const classUid =
+            typeof codeOrMeta === "number" ? codeOrMeta : undefined;
+          const resolvedMeta =
+            typeof codeOrMeta === "number" ? meta : (codeOrMeta as LogMeta);
           calls.push({
             name,
-            message,
             classUid: classUid ?? 0,
-            meta: rest[0] as LogMeta,
+            meta: resolvedMeta as LogMeta,
           });
         },
       } as unknown as Logger;
