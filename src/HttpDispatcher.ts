@@ -69,9 +69,11 @@ export class HttpDispatcher extends Dispatch<
   protected override async initialize(
     ...args: MaybeContextualArg<any>
   ): Promise<void> {
+    const generation = this.currentGeneration();
     const { log, ctxArgs } = (
       await this.logCtx(args, PersistenceKeys.INITIALIZATION, true)
     ).for(this.initialize);
+    if (this.isSuperseded(generation)) return;
 
     if (!this.adapter) {
       // Gracefully skip initialization when no adapter is observed yet.
@@ -130,6 +132,15 @@ export class HttpDispatcher extends Dispatch<
     }
 
     const conf = this.adapter.config as HttpConfig;
+    // close() (or the adapter's shutdown) may run while this session is still
+    // starting (e.g. a page left right away); it must then not open a stream
+    // nobody would ever close.
+    const generation = this.currentGeneration();
+    const closed = () => this.isSuperseded(generation);
+    if (closed()) {
+      log.warn(`Dispatch closed or adapter shut down; not listening for events`);
+      return;
+    }
 
     if (!conf.events) {
       log.warn("SSe events disabled");
@@ -156,8 +167,10 @@ export class HttpDispatcher extends Dispatch<
       eventsListenerPath,
       `${protocol}://${host}`
     ).toString();
+    const adapter = this.adapter;
     const subscriptionMode = Boolean(conf.eventsSubscription);
     const correlationId = await this.ensureCorrelationId();
+    if (closed()) return;
     const subscribedUrl = subscriptionMode
       ? this.appendQuery(listeningUrl, { cid: correlationId })
       : listeningUrl;
@@ -171,6 +184,12 @@ export class HttpDispatcher extends Dispatch<
         // retried once the stream is established (see onOpen below)
         log.error(`Failed to sync SSE subscriptions before connecting: ${e}`);
       }
+    }
+    if (closed()) {
+      log.debug(`Listening session closed while subscribing; not connecting`);
+      // the session's unsubscribe may have reached the server before its subscribe
+      await this.clearSubscriptionRegistration(adapter, correlationId);
+      return;
     }
 
     log.info(`Opening ServerEventConnector for url: ${subscribedUrl}`);
@@ -247,10 +266,12 @@ export class HttpDispatcher extends Dispatch<
     try {
       await this.connector.ensureListening();
     } catch (e: unknown) {
+      if (closed()) return;
       log.warn(
         `SSE stream to ${subscribedUrl} not established yet (${e}); reconnecting in the background`
       );
     }
+    if (closed()) return;
 
     this.listening = true;
     log.info(`HttpDispatcher is now listening at ${subscribedUrl}.`);
@@ -475,22 +496,27 @@ export class HttpDispatcher extends Dispatch<
   /**
    * @description Closes the dispatcher, its SSE connection and its subscription
    * @summary Detaches the connector listener, closes the {@link ServerEventConnector}
-   * and marks the dispatcher as no longer listening — synchronously, so an
-   * immediately following session is unaffected — then best-effort unsubscribes
-   * the closed session from the SSE server.
+   * (cancelling any pending reconnection) and marks the dispatcher as no longer
+   * listening — synchronously, so an immediately following session is unaffected.
+   * Then waits for a session start or subscription sync still in flight to settle
+   * (an abandoned start never connects and withdraws its subscription) and
+   * best-effort unsubscribes the closed session, so nothing outlives the call.
    * @param {...ContextualArgs} args - Contextual close arguments
    * @returns {Promise<void>} Resolves once the dispatcher is fully closed
    */
   override async close(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context<HttpFlags>>
   ): Promise<void> {
-    // Detach this session synchronously: the adapter may be observed again
-    // (and a new session started) before the unsubscribe call below returns.
+    // Supersedes this session synchronously (a session still starting must not
+    // connect afterwards) and waits, below, for that start to settle.
+    const closing = super.close(...args);
+    // Detach this session synchronously too: the adapter may be observed again
+    // (and a new session started) before the calls below return.
     const adapter = this.adapter;
     const correlationId = this.correlationId;
     const removeListener = this.removeConnectorListener;
     const connector = this.connector;
+    const syncing = this.subscriptionSync;
     this.removeConnectorListener = undefined;
     this.connector = undefined;
     this.correlationId = undefined;
@@ -498,8 +524,14 @@ export class HttpDispatcher extends Dispatch<
     this.listening = false;
     this.initialized = false;
 
+    // closes the stream and cancels any pending reconnection (which also
+    // releases a start waiting for the stream)
     removeListener?.();
     connector?.close();
+
+    // let a start or subscription sync in flight settle: an abandoned start
+    // withdraws its own late subscription, so nothing outlives close()
+    await Promise.allSettled([closing, syncing]);
 
     try {
       await this.clearSubscriptionRegistration(adapter, correlationId);

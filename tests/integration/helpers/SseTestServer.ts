@@ -30,6 +30,8 @@ export class SseTestServer {
   status = 502;
   /** deliver events only to streams whose correlation id subscribed the model */
   enforceSubscriptions = false;
+  /** latency of the subscribe endpoint (it records the topics before replying) */
+  subscribeDelayMs = 0;
   /** latency of the unsubscribe endpoint (it deletes the record before replying) */
   unsubscribeDelayMs = 0;
   /** topics per correlation id, as for-nest's ObserverSubscriptionRegistry keeps */
@@ -76,8 +78,11 @@ export class SseTestServer {
       if (req.method === "POST" && path === "/events/subscribe") {
         const topics: string[] = JSON.parse(body || "{}").topics ?? [];
         if (cid) this.subscriptions.set(cid, topics);
-        res.writeHead(201, { "content-type": "application/json" });
-        return res.end(JSON.stringify({ topics }));
+        setTimeout(() => {
+          res.writeHead(201, { "content-type": "application/json" });
+          res.end(JSON.stringify({ topics }));
+        }, this.subscribeDelayMs);
+        return;
       }
       if (req.method === "POST" && path === "/events/unsubscribe") {
         setTimeout(() => {

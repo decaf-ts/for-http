@@ -33,6 +33,10 @@ function recordingObserver(cls: unknown = Probe): RecordingObserver {
 
 let aliasSeq = 0;
 
+const openConnectors = (): string[] => [
+  ...((ServerEventConnector as any).cache as Map<string, unknown>).keys(),
+];
+
 describe("for-http SSE client against a for-nest-like events server", () => {
   let server: SseTestServer;
   const adapters: AxiosHttpAdapter[] = [];
@@ -73,6 +77,8 @@ describe("for-http SSE client against a for-nest-like events server", () => {
     connectors.splice(0).forEach((c) => c.close(true));
     jest.restoreAllMocks();
     await server.close();
+    // a connector left open would keep reconnecting after the test run
+    expect(openConnectors()).toEqual([]);
   });
 
   describe("headers", () => {
@@ -205,6 +211,76 @@ describe("for-http SSE client against a for-nest-like events server", () => {
 
       server.emit("Probe", "update", "p-2");
       expect(await waitFor(() => observer.events.length === 1)).toBe(true);
+    });
+  });
+
+  describe("adapter shutdown and re-initialization", () => {
+    it.each([false, true])(
+      "shutdown closes the stream and nothing reconnects afterwards (subscription mode: %s)",
+      async (eventsSubscription) => {
+        const adapter = adapterFor({ eventsSubscription });
+        adapter.observe(recordingObserver() as any);
+        expect(await waitFor(() => server.streams.size === 1)).toBe(true);
+
+        await adapter.shutdown();
+        expect(openConnectors()).toEqual([]);
+        expect(await waitFor(() => server.streams.size === 0)).toBe(true);
+        if (eventsSubscription) expect(server.posts("/events/unsubscribe")).toHaveLength(1);
+
+        const attempts = server.streamRequests().length;
+        await delay(800);
+        expect(server.streamRequests()).toHaveLength(attempts);
+      }
+    );
+
+    it("shutdown waits for a session still subscribing, which never connects and withdraws its subscription", async () => {
+      server.subscribeDelayMs = 300;
+      const adapter = adapterFor({ eventsSubscription: true });
+      adapter.observe(recordingObserver() as any);
+      // the subscribe request reached the server; its response is still pending
+      expect(await waitFor(() => server.posts("/events/subscribe").length === 1)).toBe(true);
+      const cid = server.posts("/events/subscribe")[0].headers["x-correlation-id"] as string;
+
+      await adapter.shutdown();
+      // nothing left in flight once shutdown resolved
+      expect(server.subscriptions.has(cid)).toBe(false);
+      expect(openConnectors()).toEqual([]);
+
+      await delay(800);
+      expect(server.streamRequests()).toEqual([]);
+      expect(server.subscriptions.has(cid)).toBe(false);
+    });
+
+    it.each([false, true])(
+      "leaves no stream behind when shut down right after observing (subscription mode: %s)",
+      async (eventsSubscription) => {
+        const adapter = adapterFor({ eventsSubscription });
+        adapter.observe(recordingObserver() as any);
+        await adapter.shutdown();
+        expect(openConnectors()).toEqual([]);
+        await delay(800);
+        expect(server.streams.size).toBe(0);
+        expect(openConnectors()).toEqual([]);
+      }
+    );
+
+    it("stays closed after shutdown, even when observed, until initialized again", async () => {
+      const adapter = adapterFor();
+      const first = recordingObserver();
+      adapter.observe(first as any);
+      expect(await waitFor(() => server.streams.size === 1)).toBe(true);
+      await adapter.shutdown();
+
+      const second = recordingObserver();
+      adapter.observe(second as any);
+      await delay(600);
+      expect(server.streamRequests()).toHaveLength(1);
+      expect(server.streams.size).toBe(0);
+
+      await adapter.initialize();
+      expect(await waitFor(() => server.streams.size === 1)).toBe(true);
+      server.emit("Probe", "create", "after-reinit");
+      expect(await waitFor(() => first.events.length === 1 && second.events.length === 1)).toBe(true);
     });
   });
 
