@@ -29,4 +29,6 @@ export type ServerEvent<T> = SingleServerEvent<T> | BulkServerEvent<T>;
 export type EventHandlers = {
   onEvent: ([tableName, operation, id]: ServerEvent<any>) => void;
   onError: (err: unknown) => void;
+  /** called every time the stream is (re)established */
+  onOpen?: () => void;
 };

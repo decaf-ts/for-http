@@ -212,11 +212,22 @@ export abstract class HttpAdapter<
         .catch((e) => console.warn(`Failed to sync event subscriptions: ${e}`));
   }
 
-  protected async getEventHeaders() {
-    if (!this.config.eventHeaderResolver) return {};
+  /**
+   * @description Resolves the headers for the SSE stream and subscription calls
+   * @summary Invokes `config.eventHeaderResolver` (bound to the config, so resolvers
+   * written as methods keep working) and keeps only string-valued headers.
+   * @return {Promise<Record<string, string>>} The headers to send
+   */
+  protected async getEventHeaders(): Promise<Record<string, string>> {
+    const resolver = this.config.eventHeaderResolver;
+    if (typeof resolver !== "function") return {};
 
-    const headers = await Promise.resolve(this.config.eventHeaderResolver);
-    return headers || {};
+    const headers = await Promise.resolve(resolver.call(this.config));
+    return Object.fromEntries(
+      Object.entries(headers || {}).filter(
+        ([, value]) => typeof value === "string"
+      )
+    ) as Record<string, string>;
   }
 
   /**

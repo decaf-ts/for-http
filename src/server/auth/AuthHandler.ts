@@ -262,7 +262,7 @@ export abstract class AuthHandler<
         ] as ContextualArgs<C, [string[]?]>);
     const { ctx, log } = this.logCtx(ctxArgs, this.authorize);
     log.debug(
-      `Authorizing access to ${typeof model === "string" ? model : model.name}`
+      `Authorizing access to ${typeof model === "string" ? model : (model?.name ?? "route without model")}`
     );
 
     const request = this.requestFromContext(context);

@@ -162,32 +162,50 @@ export class HttpDispatcher extends Dispatch<
       ? this.appendQuery(listeningUrl, { cid: correlationId })
       : listeningUrl;
 
+    let subscriptionsSynced = !subscriptionMode;
     if (subscriptionMode) {
-      await this.syncSubscriptions(true);
+      try {
+        await this.syncSubscriptions(true);
+        subscriptionsSynced = true;
+      } catch (e: unknown) {
+        // retried once the stream is established (see onOpen below)
+        log.error(`Failed to sync SSE subscriptions before connecting: ${e}`);
+      }
     }
 
     log.info(`Opening ServerEventConnector for url: ${subscribedUrl}`);
-    this.connector = ServerEventConnector.open(subscribedUrl, async () => {
-      if (!this.adapter) throw new InternalError("Adapter not initialized");
-      let headers: Record<string, string> = {};
-      try {
-        headers = (await (this.adapter as any).getEventHeaders()) || {};
-      } catch (e: unknown) {
-        throw new InternalError(`Failed to get event headers: ${e}`);
-      }
-      if (subscriptionMode) {
-        headers = {
-          ...headers,
-          [DecafHeaders.CORRELATION_ID]: correlationId,
-        };
-      }
-      return headers;
-    });
+    const reconnect = conf.eventsReconnect;
+    this.connector = ServerEventConnector.open(
+      subscribedUrl,
+      async () => {
+        if (!this.adapter) throw new InternalError("Adapter not initialized");
+        let headers: Record<string, string> = {};
+        try {
+          headers = (await (this.adapter as any).getEventHeaders()) || {};
+        } catch (e: unknown) {
+          throw new InternalError(`Failed to get event headers: ${e}`);
+        }
+        if (subscriptionMode) {
+          headers = {
+            ...headers,
+            [DecafHeaders.CORRELATION_ID]: correlationId,
+          };
+        }
+        return headers;
+      },
+      reconnect
+        ? {
+            reconnectDelayMs: reconnect.delayMs,
+            maxReconnectDelayMs: reconnect.maxDelayMs,
+          }
+        : undefined
+    );
 
     log.debug(
       `ServerEventConnector opened successfully for url: ${subscribedUrl}`
     );
     this.removeConnectorListener?.();
+    let opened = 0;
     this.removeConnectorListener = this.connector.addListener({
       onEvent: async (event: ServerEvent<any>) => {
         const [tableName, operation, id, ...args] = event;
@@ -213,10 +231,26 @@ export class HttpDispatcher extends Dispatch<
           adapter: String(this.adapter),
         });
       },
+      onOpen: () => {
+        // the server may have lost the subscriptions (restart, other replica)
+        // when the stream had to be re-established
+        const resync = subscriptionMode && (opened++ > 0 || !subscriptionsSynced);
+        if (!resync) return;
+        subscriptionsSynced = true;
+        this.syncSubscriptions(true).catch((e: unknown) =>
+          log.error(`Failed to re-sync SSE subscriptions: ${e}`)
+        );
+      },
     });
 
     // Avoid races where writes happen before the SSE stream finishes connecting.
-    await this.connector.ensureListening();
+    try {
+      await this.connector.ensureListening();
+    } catch (e: unknown) {
+      log.warn(
+        `SSE stream to ${subscribedUrl} not established yet (${e}); reconnecting in the background`
+      );
+    }
 
     this.listening = true;
     log.info(`HttpDispatcher is now listening at ${subscribedUrl}.`);
@@ -245,11 +279,11 @@ export class HttpDispatcher extends Dispatch<
   }
 
   /**
-   * @description Resolves or generates the stable correlation id for this dispatcher
-   * @summary Generates a {@link UUID} once and reuses it for the dispatcher's
-   * lifetime, so the SSE server can correlate subscriptions and connections to this
-   * client.
-   * @returns {Promise<string>} The dispatcher's correlation id
+   * @description Resolves or generates the correlation id of the listening session
+   * @summary Generates a {@link UUID} once per listening session (a new one after
+   * {@link close}), so the SSE server can correlate this client's subscriptions and
+   * stream, and a late unsubscribe of a closed session never affects the next one.
+   * @returns {Promise<string>} The session's correlation id
    */
   private async ensureCorrelationId(): Promise<string> {
     if (!this.correlationId) {
@@ -317,12 +351,25 @@ export class HttpDispatcher extends Dispatch<
     return `${name}.*`;
   }
 
-  private buildEventBaseUrl(): URL | undefined {
-    if (!this.adapter) return undefined;
-    const { protocol, host, eventsListenerPath } = this.adapter
-      .config as HttpConfig;
+  /**
+   * @description Builds the URL of a subscription endpoint
+   * @summary Resolves `<eventsListenerPath>/<action>`, ignoring any query string
+   * or fragment of the listener path.
+   * @param {Adapter} adapter - The observed adapter
+   * @param {"subscribe"|"unsubscribe"} action - The endpoint to resolve
+   * @returns {string|undefined} The endpoint URL, or undefined without a listener path
+   */
+  private subscriptionEndpoint(
+    adapter: Adapter<HttpConfig, any, any, any>,
+    action: "subscribe" | "unsubscribe"
+  ): string | undefined {
+    const { protocol, host, eventsListenerPath } = adapter.config as HttpConfig;
     if (!eventsListenerPath) return undefined;
-    return new URL(eventsListenerPath, `${protocol}://${host}`);
+    const base = new URL(eventsListenerPath, `${protocol}://${host}`);
+    base.search = "";
+    base.hash = "";
+    base.pathname = base.pathname.replace(/\/?$/, "/");
+    return new URL(action, base).toString();
   }
 
   /**
@@ -337,20 +384,21 @@ export class HttpDispatcher extends Dispatch<
   private async syncSubscriptionsInternal(force = false): Promise<void> {
     const conf = this.adapter?.config as HttpConfig | undefined;
     if (!conf?.eventsSubscription || !this.adapter) return;
+    // before the first forced sync, startListening() will do it
+    if (!force && !this.initialized) return;
 
-    const baseUrl = this.buildEventBaseUrl();
-    if (!baseUrl) return;
+    const topics = this.currentSubscriptionTopics();
+    const endpoint = this.subscriptionEndpoint(
+      this.adapter,
+      topics.length ? "subscribe" : "unsubscribe"
+    );
+    if (!endpoint) return;
 
     const correlationId = await this.ensureCorrelationId();
-    const topics = this.currentSubscriptionTopics();
     const signature = JSON.stringify(topics);
     if (!force && signature === this.lastSubscriptionSignature) return;
     this.lastSubscriptionSignature = signature;
 
-    const endpoint = new URL(
-      topics.length ? "subscribe" : "unsubscribe",
-      `${baseUrl.toString().replace(/\/?$/, "/")}`
-    ).toString();
     const headers = Object.assign(
       { "Content-Type": "application/json" },
       await this.resolveEventHeaders(),
@@ -361,8 +409,10 @@ export class HttpDispatcher extends Dispatch<
       method: "POST",
       headers,
       body,
+      credentials: "include",
     });
     if (!response.ok) {
+      this.lastSubscriptionSignature = undefined;
       const text = await response.text().catch(() => "");
       throw new InternalError(
         `Failed to sync SSE subscriptions (${response.status} ${response.statusText}): ${text}`
@@ -371,33 +421,34 @@ export class HttpDispatcher extends Dispatch<
   }
 
   /**
-   * @description Removes the dispatcher's subscription registration on the SSE server
-   * @summary POSTs to the server's `unsubscribe` endpoint using the correlation id
-   * header, best-effort (errors are swallowed) since close must always succeed.
+   * @description Removes a session's subscription registration on the SSE server
+   * @summary POSTs to the server's `unsubscribe` endpoint with the session's
+   * correlation id header, best-effort (errors are swallowed) since close must
+   * always succeed.
+   * @param {Adapter} adapter - The adapter the session belonged to
+   * @param {string} correlationId - The session's correlation id
    */
-  private async clearSubscriptionRegistration(): Promise<void> {
-    const conf = this.adapter?.config as HttpConfig | undefined;
-    if (!conf?.eventsSubscription || !this.adapter || !this.correlationId)
-      return;
+  private async clearSubscriptionRegistration(
+    adapter: Adapter<HttpConfig, any, any, any> | undefined,
+    correlationId: string | undefined
+  ): Promise<void> {
+    const conf = adapter?.config as HttpConfig | undefined;
+    if (!conf?.eventsSubscription || !adapter || !correlationId) return;
 
-    const baseUrl = this.buildEventBaseUrl();
-    if (!baseUrl) return;
+    const endpoint = this.subscriptionEndpoint(adapter, "unsubscribe");
+    if (!endpoint) return;
 
-    const endpoint = new URL(
-      "unsubscribe",
-      `${baseUrl.toString().replace(/\/?$/, "/")}`
-    ).toString();
     const headers = Object.assign(
       { "Content-Type": "application/json" },
-      await this.resolveEventHeaders(),
-      { [DecafHeaders.CORRELATION_ID]: this.correlationId }
+      await this.resolveEventHeaders(adapter),
+      { [DecafHeaders.CORRELATION_ID]: correlationId }
     );
     await fetch(endpoint, {
       method: "POST",
       headers,
       body: "{}",
+      credentials: "include",
     }).catch(() => undefined);
-    this.lastSubscriptionSignature = undefined;
   }
 
   /**
@@ -406,11 +457,13 @@ export class HttpDispatcher extends Dispatch<
    * object when the adapter is missing or the hook throws.
    * @returns {Promise<Record<string, string>>} The resolved event headers
    */
-  private async resolveEventHeaders(): Promise<Record<string, string>> {
-    if (!this.adapter) return {};
+  private async resolveEventHeaders(
+    adapter = this.adapter
+  ): Promise<Record<string, string>> {
+    if (!adapter) return {};
     try {
       return (
-        (await (this.adapter as HttpAdapter<any, any, any>)[
+        (await (adapter as unknown as HttpAdapter<any, any, any>)[
           "getEventHeaders"
         ]()) || {}
       );
@@ -421,9 +474,10 @@ export class HttpDispatcher extends Dispatch<
 
   /**
    * @description Closes the dispatcher, its SSE connection and its subscription
-   * @summary Best-effort cleanup: unsubscribes from the SSE server, detaches the
-   * connector listener, closes the {@link ServerEventConnector} and marks the
-   * dispatcher as no longer listening.
+   * @summary Detaches the connector listener, closes the {@link ServerEventConnector}
+   * and marks the dispatcher as no longer listening — synchronously, so an
+   * immediately following session is unaffected — then best-effort unsubscribes
+   * the closed session from the SSE server.
    * @param {...ContextualArgs} args - Contextual close arguments
    * @returns {Promise<void>} Resolves once the dispatcher is fully closed
    */
@@ -431,24 +485,26 @@ export class HttpDispatcher extends Dispatch<
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: ContextualArgs<Context<HttpFlags>>
   ): Promise<void> {
-    // const { log } = this.logCtx(args, this.close);
-    //
-    // log.debug(`Closing HttpDispatcher`, {
-    //   hasConnector: !!this.connector,
-    //   listening: this.listening,
-    //   initialized: this.initialized,
-    //   adapter: this.adapter ? String(this.adapter) : undefined,
-    // });
+    // Detach this session synchronously: the adapter may be observed again
+    // (and a new session started) before the unsubscribe call below returns.
+    const adapter = this.adapter;
+    const correlationId = this.correlationId;
+    const removeListener = this.removeConnectorListener;
+    const connector = this.connector;
+    this.removeConnectorListener = undefined;
+    this.connector = undefined;
+    this.correlationId = undefined;
+    this.lastSubscriptionSignature = undefined;
+    this.listening = false;
+    this.initialized = false;
+
+    removeListener?.();
+    connector?.close();
 
     try {
-      await this.clearSubscriptionRegistration();
+      await this.clearSubscriptionRegistration(adapter, correlationId);
     } catch {
       // closing should continue even if unsubscribe fails
     }
-
-    this.removeConnectorListener?.();
-    this.removeConnectorListener = undefined;
-    this.connector?.close();
-    this.listening = false;
   }
 }
