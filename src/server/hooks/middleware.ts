@@ -97,6 +97,15 @@ export class WebhookSignatureMiddleware {
       };
     }
 
+    // Timestamped envelope (Stripe/Svix-style): `t=<sec>,v1=<hex>`. Keep the
+    // full envelope so `verifyWebhookSignature` can enforce the replay window.
+    if (/^t=\d+,v1=[a-fA-F0-9]+$/.test(signature)) {
+      return {
+        algorithm: "sha256",
+        value: signature,
+      };
+    }
+
     if (/^[a-fA-F0-9]+$/i.test(signature)) {
       return {
         algorithm: "sha256",

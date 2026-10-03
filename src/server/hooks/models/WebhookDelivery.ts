@@ -17,6 +17,7 @@ import {
   option,
   required,
 } from "@decaf-ts/decorator-validation";
+import { writeOnly } from "../decorators";
 import { WebhookStatus } from "../constants";
 
 @table("webhook_deliveries")
@@ -52,9 +53,18 @@ export class WebhookDelivery extends Model {
   @description("optional task name for ambiguity")
   targetUrl!: string;
 
+  /**
+   * @description Subscription secret used to sign the payload.
+   * @summary Deprecated - the secret is no longer copied onto delivery rows.
+   * It is read from the owning {@link WebhookSubscription} at delivery time so
+   * a single repository read no longer exposes every secret ever rotated. Kept
+   * only to read legacy rows that were populated before the strip; always
+   * undefined for new deliveries. Do not write to it. Not required.
+   */
   @column()
-  @required()
-  @description("subscription secret")
+  @prop()
+  @description("subscription secret (deprecated; no longer populated)")
+  @writeOnly()
   secret!: string;
 
   @column()
@@ -103,6 +113,18 @@ export class WebhookDelivery extends Model {
   @index([OrderDirection.ASC, OrderDirection.DSC])
   @description("Status of delivery")
   status!: WebhookStatus;
+
+  @column()
+  @prop()
+  @index([OrderDirection.ASC, OrderDirection.DSC])
+  @description("id of the engine instance that claimed the delivery")
+  claimedBy?: string;
+
+  @column()
+  @date()
+  @index([OrderDirection.ASC, OrderDirection.DSC], ["status", "leaseUntil"])
+  @description("timestamp after which a stale PROCESSING claim can be reclaimed")
+  leaseUntil?: Date;
 
   /**
    * @description Creation timestamp for the model

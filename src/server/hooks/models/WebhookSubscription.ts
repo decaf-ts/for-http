@@ -15,6 +15,7 @@ import {
   type ModelArg,
   required,
 } from "@decaf-ts/decorator-validation";
+import { writeOnly } from "../decorators";
 
 @table("webhook_subscriptions")
 @model()
@@ -38,7 +39,19 @@ export class WebhookSubscription extends Model {
   @column()
   @required()
   @description("subscription secret")
+  @writeOnly()
   secret!: string;
+
+  /**
+   * @description Authenticated principal that owns this subscription.
+   * @summary Used to scope the webhook lifecycle/action routes (deactivate,
+   * reactivate) so a caller cannot toggle another principal's subscription
+   * (IDOR). Populated from the request's authenticated user at creation; empty
+   * for legacy resources created before ownership tracking was added.
+   */
+  @column()
+  @description("authenticated principal that owns this subscription")
+  owner?: string;
 
   // execution
   @column()

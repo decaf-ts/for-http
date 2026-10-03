@@ -15,7 +15,12 @@ import {
   service,
   UnsupportedError,
 } from "@decaf-ts/core";
-import { HookKey, WebhookDeliveryMode, WebhookStatus } from "./constants";
+import {
+  DEFAULT_CLAIM_LEASE_MS,
+  HookKey,
+  WebhookDeliveryMode,
+  WebhookStatus,
+} from "./constants";
 import { type Constructor, Metadata, uses } from "@decaf-ts/decoration";
 import { Model } from "@decaf-ts/decorator-validation";
 import { InternalError, OperationKeys } from "@decaf-ts/db-decorators";
@@ -24,6 +29,7 @@ import { WebhookEventRecord } from "./models/WebhookEventRecord";
 import {
   collectPagedResults,
   computeNextAttempt,
+  isDisallowedWebhookTarget,
   signWebhookPayload,
 } from "./utils";
 import { Lock } from "@decaf-ts/transactional-decorators";
@@ -44,6 +50,9 @@ export class WebhookDeliveryService<
   @repository(WebhookEventRecord)
   events!: Repo<WebhookEventRecord>;
 
+  @repository(WebhookSubscription)
+  subscriptions!: Repo<WebhookSubscription>;
+
   @service()
   publications!: WebhookPublisherService;
 
@@ -52,6 +61,14 @@ export class WebhookDeliveryService<
   private polling = false;
   private syncing = false;
   private running = false;
+
+  /**
+   * @description Unique identity for this engine instance. Written onto each
+   * PROCESSING claim (`claimedBy`) so a stale claim can be traced back to the
+   * instance that held it and, crucially, so a crash recovery reclaim is
+   * unambiguous.
+   */
+  protected readonly writerId = `${process.pid}-${Date.now().toString(36)}`;
 
   protected lock = new Lock();
 
@@ -84,6 +101,14 @@ export class WebhookDeliveryService<
   protected get filter() {
     if (!this._filter) this._filter = getWebhookFilter(this.config);
     return this._filter;
+  }
+
+  protected get claimLeaseMs() {
+    return this._config?.claimLeaseMs ?? DEFAULT_CLAIM_LEASE_MS;
+  }
+
+  protected get attemptTimeoutMs() {
+    return this._config?.attemptTimeoutMs ?? 10_000;
   }
 
   constructor() {
@@ -293,7 +318,9 @@ export class WebhookDeliveryService<
   ): Promise<WebhookDelivery[]> {
     const { ctx } = this.logCtx(args, this.claimDueDeliveries);
 
-    let rows = await this.deliveries
+    // Claimable due rows: pending (new) or failed (retry due). Exhausted rows
+    // are terminal (DLQ) and excluded here, killing the infinite re-claim loop.
+    let due = await this.deliveries
       .select()
       .where(
         this.deliveries
@@ -302,26 +329,53 @@ export class WebhookDeliveryService<
           .and(this.deliveries.attr("nextAttemptAt").lte(new Date()))
       )
       .orderBy("nextAttemptAt", OrderDirection.ASC)
-      // .thenBy("createdAt", OrderDirection.ASC)
+      .limit(batchSize * 2)
+      .execute(ctx);
+    // Defensive: never claim an already-exhausted delivery (legacy rows may have
+    // been left FAILED at maxAttempts before the DLQ terminal status existed).
+    due = due.filter((row) => row.attempts < row.maxAttempts);
+
+    // Stale PROCESSING lease recovery: a crash/kill leaves claims PROCESSING
+    // forever; reclaim any whose lease has expired so the event is not lost.
+    const staleProcessing = await this.deliveries
+      .select()
+      .where(
+        this.deliveries
+          .attr("status")
+          .eq(WebhookStatus.PROCESSING)
+          .and(this.deliveries.attr("leaseUntil").lte(new Date()))
+      )
+      .orderBy("nextAttemptAt", OrderDirection.ASC)
       .limit(batchSize)
       .execute(ctx);
 
-    if (rows.length === 0) return [];
+    const byId = new Map<string, WebhookDelivery>();
+    for (const row of [...due, ...staleProcessing]) {
+      const id = (row as WebhookDelivery)?.id;
+      if (id) byId.set(id, row);
+    }
+    const candidates = [...byId.values()]
+      .sort(
+        (a, b) =>
+          (a.nextAttemptAt?.getTime() ?? 0) - (b.nextAttemptAt?.getTime() ?? 0)
+      )
+      .slice(0, batchSize);
+    if (candidates.length === 0) return [];
 
-    for (const row of rows) {
+    const now = new Date();
+    const leaseUntil = new Date(now.getTime() + this.claimLeaseMs);
+    for (const row of candidates) {
       row.status = WebhookStatus.PROCESSING;
+      row.claimedBy = this.writerId;
+      row.leaseUntil = leaseUntil;
     }
 
-    rows = await this.deliveries.updateAll(rows, ctx);
+    const rows = await this.deliveries.updateAll(candidates, ctx);
     return Promise.all(
       rows.map(async (row) => {
-        if (typeof row === "string") {
-          return this.readDeliveryById(row, ctx);
-        }
-        if (row?.id) {
-          return row;
-        }
-        return this.readDeliveryById((row as WebhookDelivery).id, ctx);
+        const id =
+          typeof row === "string" ? row : (row as WebhookDelivery).id;
+        return this.readDeliveryById(id, ctx);
       })
     );
   }
@@ -335,18 +389,46 @@ export class WebhookDeliveryService<
       typeof deliveryId === "string"
         ? await this.readDeliveryById(deliveryId, ctx)
         : deliveryId;
-    const event = await this.readEventForDelivery(delivery, ctx);
+    const now = new Date();
+
+    let event: WebhookEventRecord;
+    try {
+      event = await this.readEventForDelivery(delivery, ctx);
+    } catch (error: any) {
+      // The delivery's OWN event is unreadable. Never substitute a different
+      // event's payload (V2 Defect 4) - fail the delivery instead.
+      return this.failDelivery(
+        delivery,
+        now,
+        `Webhook event ${delivery.eventId} is unreadable; refusing to deliver a different event's payload (no cross-event substitution)`,
+        ctx
+      );
+    }
+
+    // SSRF guard: never deliver to a loopback/private/link-local target.
+    if (isDisallowedWebhookTarget(delivery.targetUrl)) {
+      return this.failDelivery(
+        delivery,
+        now,
+        `Webhook target URL "${delivery.targetUrl}" is a disallowed private/loopback/link-local address (SSRF guard)`,
+        ctx
+      );
+    }
 
     const rawBody = event.payload;
-    const signature = signWebhookPayload(delivery.secret, rawBody);
-    const now = new Date();
+    const secret = await this.resolveDeliverySecret(delivery, ctx);
+    const signature = signWebhookPayload(secret, rawBody);
+    const eventId = event.id;
 
     try {
       const rawResponse = await this.http.post(delivery.targetUrl, rawBody, {
-        timeout: 10_000,
+        timeout: this.attemptTimeoutMs,
+        // Redirect-following disabled so a public-to-internal 302 cannot pivot
+        // the outbound request into a private address (SSRF).
+        maxRedirects: 0,
         headers: {
           "content-type": "application/json",
-          "x-webhook-id": event.id,
+          "x-webhook-id": eventId,
           "x-webhook-topic": event.topic,
           "x-webhook-signature": signature,
         },
@@ -372,12 +454,15 @@ export class WebhookDeliveryService<
       if (rawResponse.code >= 200 && rawResponse.code < 300) {
         delivery.status = WebhookStatus.COMPLETED;
       } else {
-        delivery.status =
-          delivery.attempts >= delivery.maxAttempts
-            ? WebhookStatus.FAILED
-            : WebhookStatus.FAILED;
         delivery.errorMessage = `HTTP ${rawResponse.code}`;
-        delivery.nextAttemptAt = computeNextAttempt(delivery.attempts);
+        if (delivery.attempts >= delivery.maxAttempts) {
+          // Attempts exhausted: park the delivery in the dead-letter queue,
+          // never to be re-claimed (the claim query excludes DLQ).
+          delivery.status = WebhookStatus.DLQ;
+        } else {
+          delivery.status = WebhookStatus.FAILED;
+          delivery.nextAttemptAt = computeNextAttempt(delivery.attempts);
+        }
       }
 
       await this.deliveries.update(delivery, ctx);
@@ -392,8 +477,13 @@ export class WebhookDeliveryService<
         50_000
       );
       delivery.updatedAt = now;
-      delivery.status = WebhookStatus.FAILED;
-      delivery.nextAttemptAt = computeNextAttempt(delivery.attempts);
+      if (delivery.attempts >= delivery.maxAttempts) {
+        // Attempts exhausted: park in the dead-letter queue.
+        delivery.status = WebhookStatus.DLQ;
+      } else {
+        delivery.status = WebhookStatus.FAILED;
+        delivery.nextAttemptAt = computeNextAttempt(delivery.attempts);
+      }
 
       await this.deliveries.update(delivery, ctx);
       await this.refreshEventStatus(event.id, ctx);
@@ -402,6 +492,38 @@ export class WebhookDeliveryService<
         `Webhook delivery ${delivery.id} failed: ${delivery.errorMessage}`
       );
     }
+  }
+
+  /**
+   * @description Fails a delivery without issuing any outbound request.
+   * @summary Used by the security guards (unreadable own-event / disallowed SSRF
+   * target). Increments the attempt count, records the reason and either parks the
+   * delivery in the DLQ (attempts exhausted) or schedules a retry. Never posts.
+   * @param {WebhookDelivery} delivery - The delivery being processed
+   * @param {Date} now - The current time
+   * @param {string} reason - The failure reason recorded on the delivery
+   * @param {Context<any>} ctx - The processing context
+   * @returns {Promise<void>} Resolves after the delivery is updated
+   */
+  private async failDelivery(
+    delivery: WebhookDelivery,
+    now: Date,
+    reason: string,
+    ctx: Context<any>
+  ): Promise<void> {
+    delivery.attempts += 1;
+    delivery.lastAttemptAt = now;
+    delivery.responseStatus = undefined;
+    delivery.responseBody = undefined;
+    delivery.errorMessage = reason.slice(0, 50_000);
+    delivery.updatedAt = now;
+    if (delivery.attempts >= delivery.maxAttempts) {
+      delivery.status = WebhookStatus.DLQ;
+    } else {
+      delivery.status = WebhookStatus.FAILED;
+      delivery.nextAttemptAt = computeNextAttempt(delivery.attempts);
+    }
+    await this.deliveries.update(delivery, ctx);
   }
 
   private async readDeliveryById(
@@ -445,18 +567,37 @@ export class WebhookDeliveryService<
     ...args: ContextualArgs<any>
   ): Promise<WebhookEventRecord> {
     const { ctx } = this.logCtx(args, this.readEventForDelivery);
+    // NEVER fall back to a different (e.g. latest same-topic) event. A delivery
+    // is bound to its own eventId; if that event cannot be read the delivery
+    // must fail rather than silently deliver another event's payload while the
+    // delivery row / x-webhook-id still points at the original event
+    // (V2 Defect 4 cross-event substitution).
+    return this.readEventById(delivery.eventId, ctx);
+  }
+
+  /**
+   * @description Resolves the signing secret for a delivery from the owning
+   * subscription (secret-strip hardening: delivery rows no longer carry the
+   * secret). Falls back to the legacy `delivery.secret` value for rows created
+   * before the strip or when the subscription cannot be read.
+   */
+  private async resolveDeliverySecret(
+    delivery: WebhookDelivery,
+    ...args: ContextualArgs<any>
+  ): Promise<string> {
+    const { ctx } = this.logCtx(args, this.resolveDeliverySecret);
     try {
-      return await this.readEventById(delivery.eventId, ctx);
-    } catch (error) {
-      const events = await this.events
-        .select()
-        .where(this.events.attr("topic").eq(delivery.topic))
-        .orderBy("createdAt", OrderDirection.DSC)
-        .limit(1)
-        .execute(ctx);
-      if (events.length > 0) return events[0];
-      throw error;
+      if (delivery.subscriptionId) {
+        const subscription = await this.subscriptions.read(
+          delivery.subscriptionId,
+          ctx
+        );
+        if (subscription?.secret) return subscription.secret;
+      }
+    } catch {
+      // fall through to the legacy field
     }
+    return delivery.secret || "";
   }
 
   protected async refreshEventStatus(
@@ -480,7 +621,9 @@ export class WebhookDeliveryService<
       (d) => d.status === WebhookStatus.COMPLETED
     ).length;
     const failedTerminal = deliveries.filter(
-      (d) => d.status === WebhookStatus.FAILED && d.attempts >= d.maxAttempts
+      (d) =>
+        d.status === WebhookStatus.DLQ ||
+        (d.status === WebhookStatus.FAILED && d.attempts >= d.maxAttempts)
     ).length;
     const pendingOrRetrying = deliveries.filter(
       (d) =>
@@ -546,6 +689,8 @@ export class WebhookDeliveryService<
       d.errorMessage = undefined;
       d.responseStatus = undefined;
       d.responseBody = undefined;
+      d.claimedBy = undefined;
+      d.leaseUntil = undefined;
     }
 
     event.status = WebhookStatus.PENDING;
@@ -643,6 +788,8 @@ export class WebhookDeliveryService<
       autoStart: cfg.autoStart,
       httpAdapter: cfg.httpAdapter,
       httpConfig: cfg.httpConfig,
+      claimLeaseMs: cfg.claimLeaseMs,
+      attemptTimeoutMs: cfg.attemptTimeoutMs,
       topics: topics,
       models: models,
       flavours: flavours,

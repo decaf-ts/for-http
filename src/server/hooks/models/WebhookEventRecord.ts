@@ -57,6 +57,17 @@ export class WebhookEventRecord extends Model {
   @description("JSON string")
   payload!: string;
 
+  /**
+   * @description Authenticated principal that owns this event.
+   * @summary Used to scope the webhook replay route (and delivery lifecycle) so a
+   * caller cannot replay another principal's event (IDOR). Populated from the
+   * request's authenticated user at publish time; empty for legacy events created
+   * before ownership tracking was added.
+   */
+  @column()
+  @description("authenticated principal that owns this event")
+  owner?: string;
+
   @column()
   @required()
   @option(WebhookStatus)

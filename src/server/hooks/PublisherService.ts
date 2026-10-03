@@ -11,7 +11,7 @@ import { collectPagedResults, matchesTopic } from "./utils";
 import type { WebhookAction, WebhookEnvelope, WebhookTopic } from "./types";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
 import { WebhookDelivery } from "./models/WebhookDelivery";
-import { WebhookStatus } from "./constants";
+import { DEFAULT_MAX_ATTEMPTS, WebhookStatus } from "./constants";
 import { OrderDirection } from "@decaf-ts/core";
 
 export type PublishDto<TPayload> = {
@@ -83,6 +83,10 @@ export class WebhookPublisherService extends Service {
           payload: entry.payload,
         };
 
+        const owner =
+          typeof (ctx as any).getOrUndefined === "function"
+            ? ((ctx as any).getOrUndefined("user") as string | undefined)
+            : undefined;
         const event = new WebhookEventRecord({
           id: envelope.id,
           model: entry.entity,
@@ -98,6 +102,7 @@ export class WebhookPublisherService extends Service {
           deliveriesSucceeded: 0,
           deliveriesFailed: 0,
           nextAttemptAt: now,
+          owner,
         });
 
         return { event, matching, topic };
@@ -116,10 +121,12 @@ export class WebhookPublisherService extends Service {
           subscriptionId: subscription.id,
           topic: row.topic,
           targetUrl: subscription.url,
-          secret: subscription.secret,
+          // The subscription secret is intentionally NOT copied onto the
+          // delivery row (secret-strip hardening). It is resolved from the
+          // owning subscription at delivery time by the delivery service.
           status: WebhookStatus.PENDING,
           attempts: 0,
-          maxAttempts: 12,
+          maxAttempts: DEFAULT_MAX_ATTEMPTS,
           nextAttemptAt: now,
           lastAttemptAt: null,
           responseStatus: null,

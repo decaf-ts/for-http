@@ -215,7 +215,7 @@ export abstract class HttpAdapter<
   protected async getEventHeaders() {
     if (!this.config.eventHeaderResolver) return {};
 
-    const headers = await Promise.resolve(this.config.eventHeaderResolver);
+    const headers = await this.config.eventHeaderResolver();
     return headers || {};
   }
 

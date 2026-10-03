@@ -45,6 +45,13 @@ export type HttpRequestTransform = (
  */
 export interface HttpRequestOptions {
   timeout?: number;
+  /**
+   * @description Maximum number of redirects to follow before aborting.
+   * @summary Setting this to `0` disables redirect-following, which prevents a
+   * public-to-internal redirect from pivoting an outbound request into a private
+   * address (SSRF). The value flows through to the underlying HTTP client config.
+   */
+  maxRedirects?: number;
   headers?: Record<string, any>;
   params?: Record<string, any>;
   baseURL?: string;

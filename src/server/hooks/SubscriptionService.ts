@@ -19,10 +19,20 @@ export class WebhookSubscriptionService extends ModelService<WebhookSubscription
     model: WebhookSubscription,
     ...args: MaybeContextualArg<any>
   ): Promise<WebhookSubscription> {
-    const { ctxArgs } = (
+    const { ctx, ctxArgs } = (
       await this.logCtx(args, OperationKeys.CREATE, true)
     ).for(this.create);
     model.active = model.active ?? true;
+    // Scope the subscription to the authenticated principal so the lifecycle /
+    // action routes can enforce ownership (IDOR). The owner is derived from the
+    // authenticated principal and is ALWAYS overwritten when a user is bound: a
+    // client-supplied `owner` value is never trusted (F5 hardening). Resources
+    // created by a request without a user keep `owner` unset (legacy) and are
+    // treated as unowned.
+    if (typeof ctx?.getOrUndefined === "function") {
+      const user = ctx.getOrUndefined("user") as string | undefined;
+      if (user) model.owner = user;
+    }
     return super.create(model, ...ctxArgs);
   }
 

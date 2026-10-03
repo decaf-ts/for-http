@@ -32,6 +32,16 @@ export type DeliveryServiceConfig<A extends Adapter<any, any, any, any>> = {
   batchSize?: number;
   pollIntervalMs?: number;
   gracefulShutdownMsTimeout?: number;
+  /**
+   * @description How long a PROCESSING claim is held before a crashed engine
+   * instance's claim is considered stale and reclaimed. Defaults to 5 minutes.
+   */
+  claimLeaseMs?: number;
+  /**
+   * @description Per-attempt HTTP delivery timeout in milliseconds. Defaults
+   * to 10000.
+   */
+  attemptTimeoutMs?: number;
   topics?: string[];
   models: Constructor<Model<boolean>>[];
   flavours: string[];

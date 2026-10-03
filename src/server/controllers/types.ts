@@ -28,4 +28,12 @@ export interface ModelControllerFactoryConfig {
   allowGroupingQueries?: boolean | GroupingQueryFlags;
   allowBulkStatement?: boolean | BulkStatementFlags;
   auth?: AuthConfig;
+  /**
+   * When set, the generated from-model CRUD is scoped to the authenticated
+   * principal recorded in the named column. Creates set the column from the
+   * request's authenticated user; reads/updates/deletes assert ownership; list
+   * routes filter to the caller's own rows. Legacy rows without an owner remain
+   * viewable/operable by any authenticated caller.
+   */
+  ownerScopedField?: string;
 }
