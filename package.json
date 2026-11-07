@@ -81,7 +81,7 @@
     "lint-fix": "eslint --fix .",
     "prepare-pr": "npm run lint-fix && npm run build:prod && npm run coverage && npm run docs",
     "prepare-release": "npm run lint-fix && npm run build:prod && npm run coverage && npm run docs",
-    "release": "./bin/tag-release.sh",
+    "release": "tag-release",
     "clean-publish": "npx clean-publish",
     "drawings": "for FILE in workdocs/drawings/*.drawio; do echo \"converting $FILE to image...\" && docker run --rm -v $(pwd):/data rlespinasse/drawio-export --format png $FILE; done && cp -rf workdocs/drawings/export/* workdocs/resources/",
     "uml": "cd workdocs/uml && for FILE in ./*.puml; do docker run --rm -v $(pwd):/work -w /work miy4/plantuml -DPLANTUML_LIMIT_SIZE=8192 -tpng $FILE; done && cd ../.. && cp -fr workdocs/uml/*.png workdocs/resources/",
@@ -122,31 +122,50 @@
     "request"
   ],
   "author": "Tiago Venceslau and Contributors",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "bugs": {
     "url": "https://github.com/decaf-ts/for-http/issues"
   },
   "homepage": "https://github.com/decaf-ts/for-http#readme",
   "devDependencies": {
-    "@decaf-ts/for-nano": "latest",
-    "@decaf-ts/utils": "latest",
+    "@decaf-ts/for-nano": "^0.15.1",
+    "@decaf-ts/for-testing": "^1.3.7",
+    "@decaf-ts/utils": "^2.0.6",
     "@types/jest": "^30.0.0",
-    "fastify": "^5.6.1"
+    "fastify": "^5.12.8"
   },
   "dependencies": {
-    "@decaf-ts/core": "latest",
-    "@decaf-ts/db-decorators": "latest",
-    "@decaf-ts/decoration": "latest",
-    "@decaf-ts/decorator-validation": "latest",
-    "@decaf-ts/injectable-decorators": "latest",
-    "@decaf-ts/logging": "latest",
-    "@decaf-ts/transactional-decorators": "latest",
-    "axios": "^1.15.2",
+    "@decaf-ts/core": "^0.34.0",
+    "@decaf-ts/db-decorators": "^0.20.0",
+    "@decaf-ts/decoration": "^0.20.0",
+    "@decaf-ts/decorator-validation": "^1.24.0",
+    "@decaf-ts/injectable-decorators": "^1.21.0",
+    "@decaf-ts/logging": "^0.30.3",
+    "@decaf-ts/transactional-decorators": "^0.14.0",
+    "axios": "^1.21.0",
     "event-source-plus": "^0.1.15"
   },
   "overrides": {
-    "test-exclude": "^7.0.2",
-    "brace-expansion": "^5.0.8"
+    "open": "^11.0.4",
+    "glob": "^14.0.4",
+    "minimatch": "^11.0.5",
+    "eslint": {
+      "minimatch": "^11.0.5"
+    },
+    "dpdm": {
+      "glob": "^14.0.4",
+      "minimatch": "^11.0.5"
+    },
+    "typescript-eslint": {
+      "minimatch": "^11.0.5"
+    },
+    "test-exclude": {
+      ".": "^8.0.0",
+      "glob": "^14.0.4",
+      "minimatch": "^11.0.5"
+    },
+    "brace-expansion": "^5.0.8",
+    "@decaf-ts/for-couchdb": "^0.16.1"
   },
   "main": "./lib/cjs/index.cjs",
   "module": "./lib/esm/index.js",

@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 import { AxiosHttpAdapter } from "../../src/axios";
 import { HttpAdapter, HttpConfig, RestRepository } from "../../src";
 import { Axios } from "axios";

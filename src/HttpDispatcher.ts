@@ -198,19 +198,18 @@ export class HttpDispatcher extends Dispatch<
       subscribedUrl,
       async () => {
         if (!this.adapter) throw new InternalError("Adapter not initialized");
-        let headers: Record<string, string> = {};
+        let headers: Record<string, string>;
         try {
           headers = (await (this.adapter as any).getEventHeaders()) || {};
         } catch (e: unknown) {
           throw new InternalError(`Failed to get event headers: ${e}`);
         }
-        if (subscriptionMode) {
-          headers = {
-            ...headers,
-            [DecafHeaders.CORRELATION_ID]: correlationId,
-          };
-        }
-        return headers;
+        return subscriptionMode
+          ? {
+              ...headers,
+              [DecafHeaders.CORRELATION_ID]: correlationId,
+            }
+          : headers;
       },
       reconnect
         ? {

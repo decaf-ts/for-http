@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 import { buildServer } from "./FastifyAdapter";
 import { FastifyRepo } from "./FastifyRepo";
 

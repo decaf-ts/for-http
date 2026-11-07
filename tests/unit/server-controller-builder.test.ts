@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 import { ServerControllerBuilder } from "../../src/server/controllers/ControllerBuilder";
 
 class TestControllerBuilder extends ServerControllerBuilder<any> {}

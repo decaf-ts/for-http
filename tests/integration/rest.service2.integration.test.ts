@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 import { AxiosHttpAdapter } from "../../src/index";
 import { RestService } from "../../src/RestService";
 import type { HttpConfig } from "../../src/types";

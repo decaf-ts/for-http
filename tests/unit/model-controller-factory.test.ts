@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 import { BaseModel, column, pk, query, route, table } from "@decaf-ts/core";
 import { model, required, type ModelArg } from "@decaf-ts/decorator-validation";
 import { composed, InternalError } from "@decaf-ts/db-decorators";

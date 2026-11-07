@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 import "@decaf-ts/core";

@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 /**
  * SSE client (HttpAdapter / HttpDispatcher / ServerEventConnector) against a
  * server reproducing for-nest's events wire behaviour — see SseTestServer.

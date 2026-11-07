@@ -1,3 +1,4 @@
+import { it } from "@decaf-ts/for-testing";
 import { Metadata } from "@decaf-ts/decoration";
 import { DBKeys } from "@decaf-ts/db-decorators";
 import { Product } from "../../../for-nest/tests/unit/Product";
