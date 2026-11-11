@@ -18,7 +18,11 @@ import {
 import { HookKey, WebhookDeliveryMode, WebhookStatus } from "./constants";
 import { type Constructor, Metadata, uses } from "@decaf-ts/decoration";
 import { Model } from "@decaf-ts/decorator-validation";
-import { InternalError, OperationKeys } from "@decaf-ts/db-decorators";
+import {
+  InternalError,
+  NotFoundError,
+  OperationKeys,
+} from "@decaf-ts/db-decorators";
 import { WebhookDelivery } from "./models/WebhookDelivery";
 import { WebhookEventRecord } from "./models/WebhookEventRecord";
 import {
@@ -137,8 +141,7 @@ export class WebhookDeliveryService<
     this.syncing = false;
     await this.stopObserving(ctx);
 
-    const timeout =
-      this._config?.gracefulShutdownMsTimeout ?? 30_000;
+    const timeout = this._config?.gracefulShutdownMsTimeout ?? 30_000;
 
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
@@ -459,12 +462,37 @@ export class WebhookDeliveryService<
     }
   }
 
+  /**
+   * Re-reads each delivery by id. Index queries may be answered from a replica that
+   * has not applied the latest write yet (e.g. a CouchDB `_find` reads a single shard
+   * copy), so an event status computed from them can miss the delivery update that
+   * triggered the refresh, and nothing would recompute it. Reads by id honour the
+   * read quorum. Deliveries deleted meanwhile are dropped.
+   */
+  protected async readLatestDeliveries(
+    deliveries: WebhookDelivery[],
+    ...args: ContextualArgs<any>
+  ): Promise<WebhookDelivery[]> {
+    const { ctx } = this.logCtx(args, this.readLatestDeliveries);
+    const latest = await Promise.all(
+      deliveries.map(async (delivery) => {
+        try {
+          return await this.deliveries.read(delivery.id, ctx);
+        } catch (e: unknown) {
+          if (e instanceof NotFoundError) return undefined;
+          throw e;
+        }
+      })
+    );
+    return latest.filter((d): d is WebhookDelivery => !!d);
+  }
+
   protected async refreshEventStatus(
     eventId: string,
     ...args: ContextualArgs<any>
   ): Promise<void> {
     const { ctx } = this.logCtx(args, this.refreshEventStatus);
-    const deliveries = await collectPagedResults(
+    const queried = await collectPagedResults(
       () =>
         this.deliveries
           .select()
@@ -475,6 +503,7 @@ export class WebhookDeliveryService<
       250,
       ctx
     );
+    const deliveries = await this.readLatestDeliveries(queried, ctx);
 
     const succeeded = deliveries.filter(
       (d) => d.status === WebhookStatus.COMPLETED
@@ -584,7 +613,9 @@ export class WebhookDeliveryService<
   async stopObserving(...args: ContextualArgs<any>) {
     const { log } = this.logCtx(args, this.stopObserving);
     if (!this._config) {
-      log.verbose(`Skipping webhook observer shutdown because service is not configured`);
+      log.verbose(
+        `Skipping webhook observer shutdown because service is not configured`
+      );
       return;
     }
     this.adapters =
