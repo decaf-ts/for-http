@@ -23,9 +23,7 @@ import { ServerRoute } from "./models";
 import type { GroupingQueryFlags } from "./types";
 
 type PersistenceLike<T extends Model<boolean>> =
-  | Repo<T>
-  | ModelService<T>
-  | Record<string, any>;
+  Repo<T> | ModelService<T> | Record<string, any>;
 
 type RouteMetadata = Record<
   string,
@@ -68,6 +66,22 @@ function getPersistenceFallback<T extends Model<boolean>>(
       return Repository.forModel(ModelConstr) as Repo<T>;
     }
   }
+}
+
+/**
+ * @description Names a generated route implementation after the persistence method it calls.
+ * @summary Server adapters (e.g. for-nest) use the implementation name as the controller
+ * method key, so every `@route`/`@query` method needs its own name or they overwrite each other.
+ * @param {string} name - The persistence method name.
+ * @param {Function} fn - The implementation.
+ * @return {Function} `fn`, renamed.
+ */
+function namedImplementation<F extends (...args: any[]) => any>(
+  name: string,
+  fn: F
+): F {
+  Object.defineProperty(fn, "name", { value: name, configurable: true });
+  return fn;
 }
 
 function metadataSource(value: any): any {
@@ -661,8 +675,7 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
           );
           const pathDirection = args.length > 1 ? args[1] : undefined;
           const resolvedDirection = (details.direction ?? pathDirection) as
-            | string
-            | undefined;
+            string | undefined;
           if (resolvedDirection && args.length > 1) args[1] = resolvedDirection;
 
           switch (method) {
@@ -1069,19 +1082,21 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
       new ServerMethodBuilder()
         .withMethod("GET")
         .withPath(path)
-        .withImplementation(function complexQuery(this: any, ...args: any[]) {
-          const target = resolvePersistenceTarget(
-            ModelConstr,
-            this,
-            persistence
-          );
-          const normalizedArgs = normalizeQueryArgs(args);
-          return invokeQueryPersistenceMethod(
-            target,
-            methodName,
-            normalizedArgs
-          );
-        })
+        .withImplementation(
+          namedImplementation(methodName, function (this: any, ...args: any[]) {
+            const target = resolvePersistenceTarget(
+              ModelConstr,
+              this,
+              persistence
+            );
+            const normalizedArgs = normalizeQueryArgs(args);
+            return invokeQueryPersistenceMethod(
+              target,
+              methodName,
+              normalizedArgs
+            );
+          })
+        )
         .build()
     );
     return this;
@@ -1102,10 +1117,19 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
         new ServerMethodBuilder()
           .withMethod(params.httpMethod)
           .withPath(params.path.replace(/^\/+|\/+$/g, ""))
-          .withImplementation(function routedMethod(this: any, ...args: any[]) {
-            const target = resolvePersistenceTarget(ModelConstr, this, source);
-            return invokeQueryPersistenceMethod(target, methodName, args);
-          })
+          .withImplementation(
+            namedImplementation(
+              methodName,
+              function (this: any, ...args: any[]) {
+                const target = resolvePersistenceTarget(
+                  ModelConstr,
+                  this,
+                  source
+                );
+                return invokeQueryPersistenceMethod(target, methodName, args);
+              }
+            )
+          )
           .build()
       );
     }

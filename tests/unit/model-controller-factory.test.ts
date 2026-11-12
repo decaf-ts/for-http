@@ -58,6 +58,30 @@ class FactoryQueryRepository {
   }
 }
 
+class MultiRouteRepository {
+  class = FactoryQueryModel;
+
+  @route("GET", "metadata/for-product/:productCode")
+  readMetadata(productCode: string) {
+    return productCode;
+  }
+
+  @route("POST", "metadata/for-product")
+  createMetadata(body: FactoryQueryModel) {
+    return body;
+  }
+
+  @query()
+  findByName(name: string) {
+    return name;
+  }
+
+  @query()
+  findByCode(code: string) {
+    return code;
+  }
+}
+
 function routesOf(controllerClass: any) {
   return ((controllerClass as any).__routes__ ?? [])
     .map((route: any) => ({
@@ -326,5 +350,60 @@ describe("server/controllers/ModelControllerFactory", () => {
       ["one-id"],
       { requestId: "delete" }
     );
+  });
+
+  it("names each @route/@query implementation after its persistence method", () => {
+    const persistence = new MultiRouteRepository() as any;
+    const Controller = new ModelControllerBuilder(
+      FactoryQueryModel,
+      persistence
+    )
+      .addComplexQueries(persistence)
+      .build() as any;
+
+    const names = Object.fromEntries(
+      Controller.__routes__.map((r: any) => [
+        `${r.method} ${r.path}`,
+        r.implementation.name,
+      ])
+    );
+    expect(names).toEqual({
+      "GET metadata/for-product/:productCode": "readMetadata",
+      "POST metadata/for-product": "createMetadata",
+      "GET query/findByName/:name": "findByName",
+      "GET query/findByCode/:code": "findByCode",
+    });
+    // server adapters (for-nest) key controller methods by these names: they must be unique
+    const all = Object.values(names);
+    expect(new Set(all).size).toEqual(all.length);
+  });
+
+  it("routes each custom @route implementation to its own persistence method", async () => {
+    const persistence = new MultiRouteRepository() as any;
+    const Controller = new ModelControllerBuilder(
+      FactoryQueryModel,
+      persistence
+    )
+      .addComplexQueries(persistence)
+      .build() as any;
+    const find = (method: string, path: string) =>
+      Controller.__routes__.find(
+        (r: any) => r.method === method && r.path === path
+      );
+
+    const body = { name: "x" };
+    await expect(
+      Promise.resolve(
+        find("POST", "metadata/for-product").implementation.call({}, body)
+      )
+    ).resolves.toEqual(body);
+    await expect(
+      Promise.resolve(
+        find("GET", "metadata/for-product/:productCode").implementation.call(
+          {},
+          "00123"
+        )
+      )
+    ).resolves.toEqual("00123");
   });
 });
