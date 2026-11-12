@@ -13,7 +13,7 @@ export type ResponseParser = <
  * @typedef {Object} HttpConfig
  * @property {('http'|'https')} protocol - The HTTP protocol to use
  * @property {string} host - The host address
- * @property {boolean} [idInUrl=true] - When true (default), write operations (create, update) include the resource id (and composed pk parts) in the URL path, matching REST semantics. Set to false to POST/PUT against the collection URL only.
+ * @property {boolean} [idInUrl=false] - Creates POST to the collection (`POST /<table>`, REST default). When true they include the pk (and composed pk parts) in the URL (`POST /<table>/<pk...>`); the server must use the same option (`ModelControllerFactoryConfig.idInUrl`). Updates always use `PUT /<table>/<pk...>`.
  * @property {Function} [eventHeaderResolver] - Resolves the headers sent on the SSE stream and on the subscribe/unsubscribe calls (called on every (re)connection; non-string values are dropped)
  * @property {EventsReconnectConfig} [eventsReconnect] - Back-off applied when the SSE stream fails or ends
  * @memberOf module:for-http

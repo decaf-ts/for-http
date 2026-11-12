@@ -80,8 +80,9 @@ export class ModelControllerFactory {
     const allowStatementlessQuery = config?.allowStatementlessQuery ?? true;
     const allowGroupingQueries = config?.allowGroupingQueries ?? true;
 
+    const idInUrl = config?.idInUrl === true;
     builder
-      .addCreateRoute()
+      .addCreateRoute(idInUrl)
       .addReadRoute()
       .addUpdateRoute()
       .addDeleteRoute();
@@ -122,6 +123,7 @@ export class ModelControllerFactory {
     const composedPaths = composedRoutePaths(ModelConstr);
     if (composedPaths.length > 1) {
       for (const path of composedPaths.slice(1)) {
+        if (idInUrl) builder.addCreateRoute(true, path);
         builder.addReadRoute(path).addUpdateRoute(path).addDeleteRoute(path);
       }
     }

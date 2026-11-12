@@ -1,23 +1,16 @@
 import {
   Adapter,
   AdapterFlags,
-  AuthorizationError,
   Condition,
-  ConnectionError,
   Context,
   ContextualArgs,
   FlagsOf,
-  ForbiddenError,
   MaybeContextualArg,
-  MigrationError,
-  ObserverError,
   Paginator,
-  PagingError,
   PersistenceKeys,
   prepared,
   PreparedModel,
   PreparedStatement,
-  QueryError,
   QueryOptions,
   Repository,
   Sequence,
@@ -27,15 +20,10 @@ import {
   Observer,
 } from "@decaf-ts/core";
 import {
-  BadRequestError,
   BaseError,
-  ConflictError,
   InternalError,
-  NotFoundError,
   OperationKeys,
   PrimaryKeyType,
-  SerializationError,
-  ValidationError,
   wrapMethodWithContext,
 } from "@decaf-ts/db-decorators";
 import {
@@ -54,6 +42,7 @@ import {
   methodMetadata,
 } from "@decaf-ts/decoration";
 import { RestService } from "./RestService";
+import { HttpErrorsByName, parseErrorMessage, parseHttpError } from "./errors";
 import { toKebabCase } from "@decaf-ts/logging";
 import { HttpStatement } from "./HttpStatement";
 import { HttpPaginator } from "./HttpPaginator";
@@ -544,24 +533,41 @@ export abstract class HttpAdapter<
   }
 
   /**
-   * @description Builds the URL for a single-resource write (create/update)
-   * @summary Honors the `idInUrl` config option (default true). When enabled,
-   * the id (and composed pk parts) are appended to the collection URL, matching
-   * the pre-existing REST behavior. When disabled, the URL targets the
-   * collection only.
+   * @description Builds the URL of a create
+   * @summary REST default: the collection (`POST /<table>`), the pk travels in the body.
+   * With the `idInUrl` config option the pk (and composed pk parts) is appended
+   * (`POST /<table>/<pk...>`); the decaf server must be configured with the same option.
    * @template M - The model type
    * @param {Constructor<M> | string} tableName - The model constructor or table name
    * @param {PrimaryKeyType} id - The resource id (may be a composed pk)
    * @return {string} The encoded URL string
    */
-  protected writeUrl<M extends Model>(
+  protected createUrl<M extends Model>(
     tableName: Constructor<M> | string,
     id: PrimaryKeyType
   ): string {
-    const idInUrl = (this.config as HttpConfig).idInUrl !== false;
-    return idInUrl
-      ? this.url(tableName, this.extractIdArgs(tableName as Constructor<M>, id))
+    return (this.config as HttpConfig).idInUrl === true
+      ? this.pkUrl(tableName, id)
       : this.url(tableName);
+  }
+
+  /**
+   * @description Builds the URL of a single resource (`/<table>/<pk...>`)
+   * @summary Used by updates (always, as REST prescribes) and by creates with `idInUrl`.
+   * Composed pks are split into their parts.
+   * @template M - The model type
+   * @param {Constructor<M> | string} tableName - The model constructor or table name
+   * @param {PrimaryKeyType} id - The resource id (may be a composed pk)
+   * @return {string} The encoded URL string
+   */
+  protected pkUrl<M extends Model>(
+    tableName: Constructor<M> | string,
+    id: PrimaryKeyType
+  ): string {
+    return this.url(
+      tableName,
+      this.extractIdArgs(tableName as Constructor<M>, id)
+    );
   }
 
   parseResponse<M extends Model>(
@@ -593,7 +599,7 @@ export abstract class HttpAdapter<
     model: Record<string, any>,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>> {
-    const url = this.writeUrl(tableName, id);
+    const url = this.createUrl(tableName, id);
     const response = await this.post<Record<string, any>>(
       url,
       JSON.stringify(model),
@@ -673,7 +679,7 @@ export abstract class HttpAdapter<
     model: Record<string, any>,
     ...args: ContextualArgs<C>
   ): Promise<Record<string, any>> {
-    const url = this.writeUrl(tableName, id);
+    const url = this.pkUrl(tableName, id);
     const response = await this.put<Record<string, any>>(
       url,
       JSON.stringify(model),
@@ -861,39 +867,44 @@ export abstract class HttpAdapter<
     );
   }
 
+  /**
+   * @description Converts any failure of an HTTP call into the matching decaf error
+   * @summary Accepts a decaf error (returned as is), an HTTP-client error carrying a
+   * `response` (`{ status, data }`), a bare HTTP status, or a message. Structured
+   * information — the error named by the server in the body/message
+   * (`[Name][code] message`), then the HTTP status — is resolved by
+   * {@link parseHttpError}; unstructured messages fall back to name matching.
+   * @param {Error | string | number} err - The failure to convert
+   * @return {BaseError} The decaf error
+   */
   static parseError<E extends BaseError>(
-    err: Error | string,
+    err: Error | string | number,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ...args: any[]
   ): E {
+    if (err instanceof BaseError) return err as E;
+    const response = (err as any)?.response;
+    if (response && typeof response.status === "number")
+      return parseHttpError(
+        response.status,
+        typeof response.data !== "undefined" ? response.data : response.body
+      ) as E;
+    if (typeof err === "number") return parseHttpError(err) as E;
+
     const msg =
-      typeof err === "string"
-        ? err
-        : typeof err === "number"
-          ? String(err)
-          : err?.message || String(err ?? "");
-    if (msg.includes(NotFoundError.name) || msg.includes("404"))
-      return new NotFoundError(err) as E;
-    if (msg.includes(ConflictError.name) || msg.includes("409"))
-      return new ConflictError(err) as E;
-    if (msg.includes(BadRequestError.name) || msg.includes("400"))
-      return new BadRequestError(err) as E;
-    if (msg.includes(ValidationError.name) || msg.includes("422"))
-      return new ValidationError(err) as E;
-    if (msg.includes(QueryError.name)) return new QueryError(err) as E;
-    if (msg.includes(PagingError.name)) return new PagingError(err) as E;
-    if (msg.includes(UnsupportedError.name))
-      return new UnsupportedError(err) as E;
-    if (msg.includes(MigrationError.name)) return new MigrationError(err) as E;
-    if (msg.includes(ObserverError.name)) return new ObserverError(err) as E;
-    if (msg.includes(AuthorizationError.name))
-      return new AuthorizationError(err) as E;
-    if (msg.includes(ForbiddenError.name)) return new ForbiddenError(err) as E;
-    if (msg.includes(ConnectionError.name))
-      return new ConnectionError(err) as E;
-    if (msg.includes(SerializationError.name))
-      return new SerializationError(err) as E;
-    return new InternalError(err) as E;
+      typeof err === "string" ? err : err?.message || String(err ?? "");
+    const parsed = parseErrorMessage(msg);
+    if (parsed.name && HttpErrorsByName[parsed.name])
+      return parseHttpError(parsed.code, msg) as E;
+    const bareStatus =
+      msg.match(/^\s*([1-5]\d\d)\s*$/) ||
+      msg.match(/status code ([1-5]\d\d)\b/i);
+    if (bareStatus) return parseHttpError(Number(bareStatus[1]), msg) as E;
+    const named = Object.keys(HttpErrorsByName).find((name) =>
+      msg.includes(name)
+    );
+    if (named) return HttpErrorsByName[named](msg) as E;
+    return new InternalError(err as Error | string) as E;
   }
 
   static override decoration() {

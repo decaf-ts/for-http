@@ -3,6 +3,7 @@ import { AuthHandler, AuthData, AuthRequestLike } from "../../src/server/auth";
 import {
   Context,
   AuthorizationError,
+  ForbiddenError,
   type ContextualArgs,
 } from "@decaf-ts/core";
 import type { Constructor } from "@decaf-ts/decoration";
@@ -369,6 +370,13 @@ describe("server auth primitives", () => {
           context
         )
       ).rejects.toThrow("Missing required namespaces: tenant:beta");
+
+      // an authenticated principal lacking a claim is forbidden (403), not unauthenticated (401)
+      const forbidden = await handler
+        .authorize(ctx, "Model", undefined, ["tenant:beta"], false, context)
+        .catch((e: unknown) => e);
+      expect(forbidden).toBeInstanceOf(ForbiddenError);
+      expect((forbidden as ForbiddenError).code).toBe(403);
 
       await expect(
         handler.authorize(

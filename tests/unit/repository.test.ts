@@ -97,7 +97,7 @@ describe("RestRepository", function () {
     expect(requestMock).toHaveBeenCalled();
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: `${cfg.protocol}://${cfg.host}/${table}/1`,
+        url: `${cfg.protocol}://${cfg.host}/${table}`,
         data: expect.any(String),
         method: "POST",
         headers: expect.any(Object),

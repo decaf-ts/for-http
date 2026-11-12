@@ -59,7 +59,7 @@ describe("Rest Service", () => {
     expect(requestMock).toHaveBeenCalled();
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: `${cfg.protocol}://${cfg.host}/${table}/id`,
+        url: `${cfg.protocol}://${cfg.host}/${table}`,
         method: "POST",
         data: expect.any(String),
         headers: expect.any(Object),

@@ -21,6 +21,7 @@ import { Metadata } from "@decaf-ts/decoration";
 import {
   AuthorizationError,
   Context,
+  ForbiddenError,
   ContextualArgs,
   ContextualLoggedClass,
   PersistenceKeys,
@@ -466,10 +467,14 @@ export abstract class AuthHandler<
     }
   }
 
+  /**
+   * The validate* checks run on an AUTHENTICATED principal: a missing role or namespace is a
+   * permission failure (403 {@link ForbiddenError}), not an authentication one (401).
+   */
   protected validateRouteRoles(requiredRoles: string[], data: D) {
     const missing = this.findMissingClaims(requiredRoles, data);
     if (missing.length > 0) {
-      throw new AuthorizationError(
+      throw new ForbiddenError(
         `Missing required roles: ${missing.join(", ")}`
       );
     }
@@ -478,7 +483,7 @@ export abstract class AuthHandler<
   protected validateRouteNamespaces(requiredNamespaces: string[], data: D) {
     const missing = this.findMissingClaims(requiredNamespaces, data);
     if (missing.length > 0) {
-      throw new AuthorizationError(
+      throw new ForbiddenError(
         `Missing required namespaces: ${missing.join(", ")}`
       );
     }
@@ -487,7 +492,7 @@ export abstract class AuthHandler<
   protected validateModelRoles(modelRoles: string[], data: D) {
     const missing = this.findMissingClaims(modelRoles, data);
     if (missing.length > 0) {
-      throw new AuthorizationError(
+      throw new ForbiddenError(
         `Missing required roles: ${missing.join(", ")}`
       );
     }
@@ -496,7 +501,7 @@ export abstract class AuthHandler<
   protected validateModelNamespaces(modelNamespaces: string[], data: D) {
     const missing = this.findMissingClaims(modelNamespaces, data);
     if (missing.length > 0) {
-      throw new AuthorizationError(
+      throw new ForbiddenError(
         `Missing required namespaces: ${missing.join(", ")}`
       );
     }

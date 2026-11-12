@@ -1,6 +1,7 @@
 import { Model, type ModelConstructor } from "@decaf-ts/decorator-validation";
 import { Metadata } from "@decaf-ts/decoration";
 import {
+  BadRequestError,
   BulkCrudOperationKeys,
   DBKeys,
   InternalError,
@@ -262,6 +263,65 @@ function modelRouteParameters<T extends Model<boolean>>(
   };
 }
 
+/**
+ * @description Builds the payload of a write whose URL carries the primary key.
+ * @summary Every pk segment of the route path (the `@pk` property, or each part of a
+ * `@composed` pk) is matched against the payload: a value present in the payload must equal
+ * the URL's, otherwise a {@link BadRequestError} (400) is thrown; a missing value is taken
+ * from the URL. For a composed pk, a `@pk` value present in the payload must also equal
+ * the composed key built from the URL parts.
+ * @param {ModelConstructor} ModelConstr - The model class.
+ * @param {string} routePath - The route path (e.g. `:id` or `:productCode/:batchNumber`).
+ * @param {unknown} body - The request payload.
+ * @param {Array<string | number>} routeParams - The URL parameters, in route order.
+ * @return {Model} The payload as a model instance.
+ */
+function payloadMatchingUrlPk<T extends Model<boolean>>(
+  ModelConstr: ModelConstructor<T>,
+  routePath: string,
+  body: unknown,
+  routeParams: Array<string | number>
+): T {
+  const { pkName, getPK } = modelRouteParameters(ModelConstr);
+  const plain: Record<string, any> = JSON.parse(JSON.stringify(body ?? {}));
+  const segments = routePath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => segment.replace(/^:/, ""));
+
+  const mismatch = (name: string, url: unknown, payload: unknown) =>
+    new BadRequestError(
+      `${name} in the URL (${String(url)}) does not match the payload (${String(payload)})`
+    );
+
+  segments.forEach((name, index) => {
+    const urlValue = routeParams[index];
+    if (typeof urlValue === "undefined") return;
+    const payloadValue = plain[name];
+    if (
+      payloadValue !== undefined &&
+      payloadValue !== null &&
+      String(payloadValue) !== String(urlValue)
+    )
+      throw mismatch(name, urlValue, payloadValue);
+    if (payloadValue === undefined || payloadValue === null)
+      plain[name] = urlValue;
+  });
+
+  const isComposed = !(segments.length === 1 && segments[0] === pkName);
+  if (isComposed) {
+    const composedKey = getPK(...routeParams);
+    const payloadPk = plain[pkName];
+    if (
+      payloadPk !== undefined &&
+      payloadPk !== null &&
+      String(payloadPk) !== String(composedKey)
+    )
+      throw mismatch(pkName, composedKey, payloadPk);
+  }
+  return new ModelConstr(plain as any);
+}
+
 export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
   private readonly controller: ServerControllerBuilder<C>;
 
@@ -287,23 +347,42 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
     return this;
   }
 
-  addCreateRoute(): this {
+  /**
+   * @description Registers the create route.
+   * @summary REST default: `POST /<table>`, the primary key travels in the payload. With
+   * `idInUrl` (the same option the HttpAdapter client honours) the route becomes
+   * `POST /<table>/<pk...>`, and the URL pk must match the payload's (see
+   * {@link payloadMatchingUrlPk}).
+   * @param {boolean} [idInUrl=false] - Expect the primary key in the URL.
+   * @param {string} [pathOverride] - pk route path (composed-pk fallback paths).
+   */
+  addCreateRoute(idInUrl = false, pathOverride?: string): this {
     if (isOperationBlocked(this.ModelConstr, OperationKeys.CREATE)) return this;
     const ModelConstr = this.ModelConstr;
     const fallback = this.persistence;
+    const routePath = idInUrl
+      ? (pathOverride ?? modelRouteParameters(ModelConstr).path)
+      : "";
 
     this.controller.addMethodFromRoute(
       new ServerMethodBuilder()
         .withMethod("POST")
-        .withPath("")
-        .withImplementation(function create(this: any, data: T) {
+        .withPath(routePath)
+        .withImplementation(function create(
+          this: any,
+          data: T,
+          ...routeParams: Array<string | number>
+        ) {
           const persistence = resolvePersistenceTarget(
             ModelConstr,
             this,
             fallback
           );
+          const payload = idInUrl
+            ? payloadMatchingUrlPk(ModelConstr, routePath, data, routeParams)
+            : data;
           return invokeDirectPersistenceMethod(persistence, "create", [
-            data,
+            payload,
             this?.ctx,
           ]);
         })
@@ -364,12 +443,14 @@ export class ModelControllerBuilder<T extends Model<boolean>, C = any> {
             this,
             fallback
           );
-          const id = getPK(...routeParams);
-          const plainBody = JSON.parse(JSON.stringify(body));
-          const payload = new ModelConstr({
-            ...(plainBody as any),
-            [pkName]: id,
-          });
+          const payload = payloadMatchingUrlPk(
+            ModelConstr,
+            routePath,
+            body,
+            routeParams
+          );
+          (payload as any)[pkName] =
+            (payload as any)[pkName] ?? getPK(...routeParams);
           return invokeDirectPersistenceMethod(persistence, "update", [
             payload,
             this?.ctx,

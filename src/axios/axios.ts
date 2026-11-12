@@ -16,6 +16,7 @@ import {
   PreparedStatementKeys,
 } from "@decaf-ts/core";
 import { AxiosFlavour } from "./constants";
+import { parseHttpError } from "../errors";
 import { Model } from "@decaf-ts/decorator-validation";
 import { Constructor } from "@decaf-ts/decoration";
 
@@ -206,7 +207,9 @@ export class AxiosHttpAdapter extends HttpAdapter<
       throw new InternalError("this should be impossible");
     }
     if (res.status >= 400)
-      throw this.parseError((res.error as Error) || (res.status as any));
+      throw res.error instanceof BaseError
+        ? res.error
+        : parseHttpError(res.status, this.normalizeResponseBody(res));
     const body = this.normalizeResponseBody(res);
     switch (method) {
       case BulkCrudOperationKeys.CREATE_ALL:

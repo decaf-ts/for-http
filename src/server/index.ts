@@ -7,3 +7,4 @@ export * from "./logging";
 export * from "./auth";
 
 import "./logging/params";
+export * from "../errors";

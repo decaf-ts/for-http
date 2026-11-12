@@ -100,7 +100,7 @@ describe("RestRepository", function () {
     expect(requestMock).toHaveBeenCalledTimes(1);
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: `${cfg.protocol}://${cfg.host}/${table}/${model.name}/${model.age}`,
+        url: `${cfg.protocol}://${cfg.host}/${table}`,
         method: "POST",
         data: expect.any(String),
         headers: expect.any(Object),

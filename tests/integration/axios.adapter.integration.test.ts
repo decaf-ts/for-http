@@ -80,7 +80,7 @@ describe("AxiosHttpAdapter integration (no network)", () => {
       ctx
     );
     expect(created.method).toBe("post");
-    expect(created.url).toBe("https://example.com/users/1");
+    expect(created.url).toBe("https://example.com/users");
 
     const read = await adapter.read(Users, 2, ctx);
     expect(read.method).toBe("get");
