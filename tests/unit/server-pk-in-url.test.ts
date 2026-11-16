@@ -15,6 +15,33 @@ class PkItem extends BaseModel {
   name!: string;
 }
 
+@table("pk_url_filter_empty")
+@model()
+class PkFilterEmpty extends BaseModel {
+  @pk()
+  @composed(
+    ["productCode", "batchNumber", "leafletType", "lang", "epiMarket"],
+    ":",
+    ["batchNumber", "epiMarket"]
+  )
+  id!: string;
+
+  @column()
+  productCode!: string;
+
+  @column()
+  batchNumber?: string;
+
+  @column()
+  leafletType!: string;
+
+  @column()
+  lang!: string;
+
+  @column()
+  epiMarket?: string;
+}
+
 @table("pk_url_composed")
 @model()
 class PkComposed extends BaseModel {
@@ -78,6 +105,39 @@ describe("server: primary key in the URL (idInUrl)", () => {
     expect(() => update.implementation.call({}, { id: "x", name: "B" }, "a")).toThrow(
       /id in the URL \(a\) does not match the payload \(x\)/
     );
+  });
+
+  it("resolves overlapping filterEmpty routes from the payload fields", async () => {
+    const routes = (ModelControllerFactory.create(
+      PkFilterEmpty,
+      echo
+    ) as any).__routes__ as any[];
+    const update = routes.find(
+      (candidate) =>
+        candidate.method === "PUT" &&
+        candidate.path === ":productCode/:batchNumber/:leafletType/:lang"
+    );
+    expect(update).toBeDefined();
+
+    const result = await update.implementation.call(
+      {},
+      {
+        productCode: "00499999033036",
+        leafletType: "leaflet",
+        lang: "en",
+        epiMarket: "br",
+      },
+      "00499999033036",
+      "leaflet",
+      "en",
+      "br"
+    );
+
+    expect(result.model.productCode).toBe("00499999033036");
+    expect(result.model.batchNumber).toBeUndefined();
+    expect(result.model.leafletType).toBe("leaflet");
+    expect(result.model.lang).toBe("en");
+    expect(result.model.epiMarket).toBe("br");
   });
 
   it("matches every part of a composed pk, and the composed key itself", async () => {

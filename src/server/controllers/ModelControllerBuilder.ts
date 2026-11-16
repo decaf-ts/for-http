@@ -278,6 +278,80 @@ function modelRouteParameters<T extends Model<boolean>>(
 }
 
 /**
+ * @description Lists positional route interpretations for a composed primary key.
+ * @summary Optional composed-key fields can make fallback routes overlap (for example,
+ * omitting a middle field has the same number of path segments as omitting a trailing field).
+ * @param {ModelConstructor} ModelConstr - The model class.
+ * @return {string[][]} Every legal ordered path-field variant.
+ */
+function composedRouteVariants<T extends Model<boolean>>(
+  ModelConstr: ModelConstructor<T>
+): string[][] {
+  const pk = Model.pk(ModelConstr) as keyof Model<any>;
+  const composed = Metadata.get(
+    ModelConstr,
+    Metadata.key(DBKeys.COMPOSED, pk)
+  );
+  const args: string[] = composed?.args?.length
+    ? Array.from(new Set(composed.args))
+    : [pk as string];
+  if (!composed?.filterEmpty) return [args];
+
+  const canOmit = (name: string) =>
+    composed.filterEmpty === true
+      ? true
+      : Array.isArray(composed.filterEmpty)
+        ? composed.filterEmpty.includes(name)
+        : false;
+  const variants: string[][] = [];
+  const walk = (index: number, current: string[]) => {
+    if (index >= args.length) {
+      if (current.length) variants.push([...current]);
+      return;
+    }
+    const name = args[index];
+    current.push(name);
+    walk(index + 1, current);
+    current.pop();
+    if (canOmit(name)) walk(index + 1, current);
+  };
+  walk(0, []);
+  return variants;
+}
+
+function routeFields<T extends Model<boolean>>(
+  ModelConstr: ModelConstructor<T>,
+  routePath: string,
+  body: Record<string, any>,
+  routeParams: Array<string | number>
+): string[] {
+  const requested = routePath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => segment.replace(/^:/, ""));
+  const variants = composedRouteVariants(ModelConstr);
+  const candidates = variants.filter(
+    (fields) => fields.length === routeParams.length
+  );
+  if (!candidates.some((fields) => fields.join("/") === requested.join("/")))
+    return requested;
+
+  const matchesPayload = (fields: string[]) => {
+    const mapped = new Set(fields);
+    return variants[0].every((field) => {
+      const value = body[field];
+      const hasValue = value !== undefined && value !== null && value !== "";
+      if (!mapped.has(field)) return !hasValue;
+      const index = fields.indexOf(field);
+      return !hasValue || String(value) === String(routeParams[index]);
+    });
+  };
+  if (matchesPayload(requested)) return requested;
+  const matching = candidates.filter(matchesPayload);
+  return matching.length === 1 ? matching[0] : requested;
+}
+
+/**
  * @description Builds the payload of a write whose URL carries the primary key.
  * @summary Every pk segment of the route path (the `@pk` property, or each part of a
  * `@composed` pk) is matched against the payload: a value present in the payload must equal
@@ -298,10 +372,7 @@ function payloadMatchingUrlPk<T extends Model<boolean>>(
 ): T {
   const { pkName, getPK } = modelRouteParameters(ModelConstr);
   const plain: Record<string, any> = JSON.parse(JSON.stringify(body ?? {}));
-  const segments = routePath
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => segment.replace(/^:/, ""));
+  const segments = routeFields(ModelConstr, routePath, plain, routeParams);
 
   const mismatch = (name: string, url: unknown, payload: unknown) =>
     new BadRequestError(
