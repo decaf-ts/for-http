@@ -3,6 +3,7 @@ const config = {
   // eslint-disable-next-line no-undef
   rootDir: __dirname,
   preset: "ts-jest/presets/default-esm",
+  watchman: false,
   transform: {
     "^.+\\.(ts|tsx)$": [
       "ts-jest",
